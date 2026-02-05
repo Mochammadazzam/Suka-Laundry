@@ -25,24 +25,24 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install
-          # Menggunakan html-minifier untuk mempersulit pembacaan kode HTML/JS gabungan
           npm install -g html-minifier
 
-      - name: Obfuscate & Minify HTML (Anti-View Source)
+      - name: Minify HTML
         run: |
-          # Teknik ini akan menghapus semua spasi, baris baru, dan komentar 
-          # sehingga kode menjadi satu baris panjang yang sangat sulit dipelajari.
-          html-minifier --collapse-whitespace --remove-comments --remove-optional-tags --remove-redundant-attributes --remove-script-type-attributes --minify-js true --minify-css true www/index.html -o www/index.html
+          html-minifier --collapse-whitespace --remove-comments --minify-js true www/index.html -o www/index.html
 
       - name: Initialize Capacitor Android
         run: |
           npx cap add android
           npx cap sync android
 
-      - name: Inject Permissions (Super Bluetooth & Storage)
+      - name: Inject Master Permissions
         run: |
-          # Menambahkan izin lengkap untuk Bluetooth & Internet agar printer jalan
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+          # Menambahkan semua varian izin Bluetooth dan Lokasi ke AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          
+          # Tambahkan fitur hardware agar sistem mengizinkan akses Bluetooth
+          sed -i '/<application/i \    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build APK with Gradle
         run: |
@@ -53,5 +53,5 @@ jobs:
       - name: Upload Result APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-Final
+          name: Suka-Laundry-Pro-V2
           path: android/app/build/outputs/apk/debug/app-debug.apk
