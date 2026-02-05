@@ -1,8 +1,0 @@
-{
-  "appId": "com.sukalaundry.azzam",
-  "appName": "Suka Laundry",
-  "webDir": "www",
-  "server": {
-    "androidScheme": "https"
-  }
-}
