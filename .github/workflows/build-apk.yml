@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK - Suka Laundry Pro
 
 on:
   push:
@@ -23,17 +23,24 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install -g javascript-obfuscator
 
-      - name: Add Android Platform
+      - name: Obfuscate Code (Anti Decompile/View Source)
+        run: |
+          # Mengacak file index.html agar kodenya tidak bisa dibaca manusia
+          javascript-obfuscator www/index.html --output www/index.html --compact true --self-defending true --string-array-encoding ['base64'] --unicode-escape-sequence true
+
+      - name: Initialize Capacitor Android
         run: |
           npx cap add android
           npx cap sync android
 
-      - name: Inject Permissions (Bluetooth & Storage)
+      - name: Inject Permissions (Super Bluetooth & Storage)
         run: |
-          # Menambahkan izin akses bluetooth dan internet ke AndroidManifest
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+          # Menambahkan izin lengkap untuk Bluetooth (Android 10-14) & Internet
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build APK with Gradle
         run: |
@@ -41,8 +48,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Result APK
+      - name: Upload Protected APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-APK
+          name: Suka-Laundry-Pro-Protected
           path: android/app/build/outputs/apk/debug/app-debug.apk
