@@ -516,19 +516,30 @@
         // 1. FUNGSI SAMBUNG PRINTER (btConnect)
                          // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI FIX
        async function btConnect() {
-    // 1. Definisikan isNative di sini agar fungsi tidak error
     const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
 
     if (isNative && typeof BluetoothLe !== 'undefined') {
         try {
-            // Reset Bluetooth State
+            // 1. Inisialisasi & Cek Izin
             try { await BluetoothLe.initialize(); } catch(e) {}
+            
+            // 2. Minta Izin (Wajib di-await agar user punya waktu klik "Allow")
+            const perm = await BluetoothLe.requestPermissions();
+            
+            // 3. Cek apakah Bluetooth HP Aktif
+            const status = await BluetoothLe.isEnabled();
+            if (!status.value) {
+                showMessage("Nyalakan Bluetooth HP dulu!");
+                return;
+            }
+
+            // 4. Reset state scan
             try { await BluetoothLe.stopScan(); } catch(e) {}
+            
+            // Jeda agar UI Android siap
+            await new Promise(r => setTimeout(r, 600));
 
-            // Minta Izin
-            await BluetoothLe.requestPermissions();
-
-            // Buka Panel Scan
+            // 5. Buka Panel Scan (Display All agar universal)
             const device = await BluetoothLe.requestDevice({
                 displayAllDevices: true,
                 optionalServices: [SERVICE_UUID] 
@@ -536,7 +547,8 @@
 
             if (device && device.deviceId) {
                 app.printDevice = device;
-                // Proses koneksi
+                showMessage("Menghubungkan...");
+                
                 await BluetoothLe.connect({ deviceId: device.deviceId });
                 
                 document.getElementById('btn-printer').style.color = '#2ecc71'; 
@@ -544,11 +556,12 @@
             }
         } catch (e) {
             console.error("BT Error:", e);
-            showMessage("Scan Dibatalkan");
+            // Ini akan muncul kalau user klik luar panel atau GPS mati
+            showMessage("Scan Dibatalkan / Periksa GPS");
         }
     } 
-    // Logika untuk Chrome / Web
     else if (navigator.bluetooth) {
+        // Logika Web/Chrome biarkan tetap
         try {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ services: [SERVICE_UUID] }],
@@ -562,13 +575,13 @@
             document.getElementById('btn-printer').style.color = 'var(--success)';
             showMessage("Printer Terhubung (Web)!");
         } catch (e) {
-            console.error(e);
             showMessage("Koneksi Web Gagal");
         }
     } else {
-        showMessage("Bluetooth tidak didukung di perangkat ini");
+        showMessage("Bluetooth tidak didukung");
     }
 }
+
 
 
         // 2. FUNGSI CETAK STRUK (printThermalInvoice)
