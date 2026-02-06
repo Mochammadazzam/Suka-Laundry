@@ -20,18 +20,18 @@ jobs:
 
       - name: Build Web Assets
         run: |
-          mkdir -p www
-          # Jika kamu punya script build asli, ganti baris di bawah ini
-          echo "Web Assets Ready" > www/index.html 
+          # Kita hapus baris echo yang kemarin agar file index.html aslimu tidak terhapus
+          echo "Memulai sinkronisasi aset dari folder www..."
 
       - name: Capacitor Sync
         run: |
           npx cap add android || true
+          # Ini akan menyalin file dari folder www ke folder native android
           npx cap sync android
 
       - name: Inject Bluetooth Permissions
         run: |
-          # Menyuntikkan izin Bluetooth ke AndroidManifest.xml secara otomatis
+          # Menyuntikkan izin Bluetooth ke AndroidManifest.xml
           sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build Android APK
@@ -41,6 +41,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SukaLaundry-Debug-APK
+          name: SukaLaundry-Pro-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
