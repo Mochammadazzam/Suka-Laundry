@@ -1,4 +1,4 @@
-name: Build Protected Android APK
+name: Build Protected APK
 
 on:
   push:
@@ -19,25 +19,26 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Build & Obfuscate HTML/JS
+      - name: Protect Code (Obfuscation)
         run: npm run build
 
       - name: Initialize Capacitor Android
         run: |
-          npx cap add android
+          npx cap add android || true
           npx cap sync android
 
       - name: Inject Bluetooth Permissions
         run: |
+          # Menyisipkan izin hardware ke AndroidManifest
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Enable Anti-Decompile (ProGuard/R8)
+      - name: Enable ProGuard (Anti-Decompile Native)
         run: |
-          # Mengaktifkan minifyEnabled dan shrinkResources di build.gradle
+          # Mengaktifkan pengacakan kode Java/Native
           sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
           sed -i 's/proguardFiles/shrinkResources true\n            proguardFiles/g' android/app/build.gradle
 
@@ -47,15 +48,14 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Build APK (Release Mode)
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          # Menggunakan assembleRelease agar proteksi ProGuard aktif maksimal
           ./gradlew assembleRelease
 
-      - name: Upload Protected APK
+      - name: Upload APK Result
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-Protected
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: Suka-Laundry-Pro-Release
+          path: android/app/build/outputs/apk/release/*.apk
