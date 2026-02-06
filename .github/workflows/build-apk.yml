@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Update ke v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # Update ke v4
         with:
-          node-version: 18
+          node-version: 20 # Gunakan node terbaru yang lebih stabil
 
       - name: Install Dependencies
         run: npm install
@@ -23,11 +23,17 @@ jobs:
         run: npm run build
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3 # Update ke v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v4 # Tambahan wajib untuk Gradle terbaru
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
       - name: Capacitor Sync
         run: |
-          npx cap add android
+          npx cap add android || true
           npx cap sync android
 
       - name: Build APK with Gradle
@@ -37,7 +43,8 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # INI YANG WAJIB V4
         with:
           name: Suka-Laundry-Pro-Release
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          overwrite: true # Fitur v4 agar tidak error saat upload ulang
