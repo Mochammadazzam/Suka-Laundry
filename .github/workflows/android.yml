@@ -15,26 +15,30 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Install Tools & Plugins
+        run: |
+          npm install
+          npm install @capacitor/cli @capacitor/core @capacitor/android
 
-      - name: Prepare Web Assets
+      - name: Prepare Assets (Anti-Error webDir)
         run: |
           mkdir -p www
           cp index.html www/
-          # Jika kamu punya file lain selain index.html, robot akan otomatis memasukkannya ke build
+          # Jika ada file lain, robot akan otomatis membawanya
 
-      - name: Setup Capacitor Android
+      - name: Initialize & Sync Capacitor
         run: |
           npx cap add android
           npx cap sync android
 
-      - name: Inject Permissions & Anti-Decompile
+      - name: Inject Permissions (Bluetooth & Location)
         run: |
-          # Menambahkan Izin Bluetooth, Scan, dan Lokasi untuk Android 13/14
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          
-          # Mengaktifkan Minify & Obfuscation (Anti-Decompile)
+          # Menyisipkan Izin Scan & Connect Bluetooth (Standar Android 12-14)
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Enable Anti-Decompile (Minify & Obfuscate)
+        run: |
+          # Mengubah settingan Gradle agar kode diacak (Obfuscation)
           sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
           sed -i 's/shrinkResources false/shrinkResources true/g' android/app/build.gradle
 
@@ -44,13 +48,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build APK assembleDebug
+      - name: Build APK (Assemble Debug)
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Result
+      - name: Upload APK Result
         uses: actions/upload-artifact@v4
         with:
           name: Suka-Laundry-Pro-V1
