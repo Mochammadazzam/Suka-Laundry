@@ -8,9 +8,10 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
-    "javascript-obfuscator": "^4.1.0"
+    "javascript-obfuscator": "^4.1.0",
+    "html-minifier": "^4.0.0"
   },
   "scripts": {
-    "build": "mkdir -p www && javascript-obfuscator index.html --output www/index.html --compact true --self-defending true --string-array-rotate true"
+    "build": "node build-script.js"
   }
 }
