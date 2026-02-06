@@ -1,14 +1,16 @@
 {
   "name": "sukalaundry-pro",
   "version": "1.0.0",
+  "description": "Aplikasi Kasir Suka Laundry Pro",
+  "main": "index.js",
   "scripts": {
-    "build": "npx javascript-obfuscator www --output www --compact true --self-defending true --string-array true --rotate-string-array true --string-array-threshold 0.75"
+    "obfuscate": "npx javascript-obfuscator ./www --output ./www --compact true --self-defending true --string-array true --rotate-string-array true --string-array-threshold 0.75"
   },
   "dependencies": {
-    "@capacitor/android": "^5.0.0",
-    "@capacitor/cli": "^5.0.0",
-    "@capacitor/core": "^5.0.0",
-    "@capacitor-community/bluetooth-le": "^5.0.0"
+    "@capacitor/android": "^5.7.0",
+    "@capacitor/cli": "^5.7.0",
+    "@capacitor/core": "^5.7.0",
+    "@capacitor-community/bluetooth-le": "latest"
   },
   "devDependencies": {
     "javascript-obfuscator": "^4.1.0"
