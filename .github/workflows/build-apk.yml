@@ -1,4 +1,4 @@
-name: Build Suka Laundry Pro
+name: Build Fast Suka Laundry
 
 on:
   push:
@@ -19,28 +19,26 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Apply Web Protection
+      - name: Clean & Minify Web Assets
         run: npm run build
 
-      - name: Setup Android Project
+      - name: Setup Android
         run: |
           npx cap add android || true
           npx cap sync android
 
-      - name: Inject Permissions & Hardware Access
+      - name: Inject Permissions
         run: |
-          # Menyisipkan izin Bluetooth & Lokasi secara paksa ke Manifest
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Native Obfuscation (R8)
+      - name: Disable Heavy Protections
         run: |
-          # Mengaktifkan proteksi kode Java/Native
-          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
-          sed -i 's/proguardFiles/shrinkResources true\n            proguardFiles/g' android/app/build.gradle
+          # Kita pastikan minifyEnabled bernilai false agar instalasi secepat kilat
+          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,14 +46,14 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Build Installable APK
+      - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug # Debug mode agar APK ter-sign otomatis dan valid
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-FINAL
+          name: Suka-Laundry-Fast-Install
           path: android/app/build/outputs/apk/debug/app-debug.apk
