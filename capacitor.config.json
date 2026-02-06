@@ -1,8 +1,16 @@
 {
   "appId": "com.sukalaundry.pro",
   "appName": "Suka Laundry Pro",
-  "webDir": "www",
+  "webDir": ".",
+  "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
+  },
+  "android": {
+    "buildOptions": {
+      "releaseType": "APK",
+      "minifyEnabled": true,
+      "shrinkResources": true
+    }
   }
 }
