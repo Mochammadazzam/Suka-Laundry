@@ -4,7 +4,7 @@
   "description": "Aplikasi Kasir Suka Laundry Pro",
   "main": "index.js",
   "scripts": {
-    "obfuscate": "npx javascript-obfuscator ./www --output ./www --compact true --self-defending true --string-array true --rotate-string-array true --string-array-threshold 0.75"
+    "obfuscate": "npx javascript-obfuscator ./www --output ./www --compact true --self-defending true --string-array true --string-array-rotate true --string-array-threshold 0.75"
   },
   "dependencies": {
     "@capacitor/android": "^5.7.0",
