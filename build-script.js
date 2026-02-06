@@ -6,11 +6,11 @@ const minify = require('html-minifier').minify;
 const htmlPath = path.join(__dirname, 'www', 'index.html');
 
 if (!fs.existsSync(htmlPath)) {
-    console.error("❌ Error: index.html tidak ditemukan!");
+    console.error("❌ Error: index.html tidak ditemukan di folder www!");
     process.exit(1);
 }
 
-console.log("🚀 Mengoptimalkan proteksi agar instalasi lebih cepat...");
+console.log("🔒 Memulai Enkripsi Kode & Proteksi Anti-Maling...");
 let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
 const scriptRegex = /<script>([\s\S]*?)<\/script>/;
@@ -19,18 +19,19 @@ const match = htmlContent.match(scriptRegex);
 if (match && match[1]) {
     const originalJs = match[1];
 
-    // Konfigurasi yang diseimbangkan: Tetap sulit dibaca, tapi ramah prosesor HP
+    // Proteksi tingkat menengah yang aman untuk verifikasi sistem Android
     const obfuscatedJs = JavaScriptObfuscator.obfuscate(originalJs, {
         compact: true,
-        controlFlowFlattening: false, // DIMATIKAN: Ini penyebab utama instalasi lama
-        deadCodeInjection: false,     // DIMATIKAN: Agar ukuran & verifikasi lebih ringan
-        debugProtection: true,        // TETAP AKTIF: Biar tidak bisa di-inspect
-        disableConsoleOutput: true,   // TETAP AKTIF
-        selfDefending: true,          // TETAP AKTIF
-        stringArray: true,            // TETAP AKTIF: Menyembunyikan teks/string
+        controlFlowFlattening: false, // Dimatikan agar instalasi cepat
+        debugProtection: true,        // Mencegah debugging
+        disableConsoleOutput: true,   // Menyembunyikan log sensitif
+        selfDefending: true,          // Mencegah perusakan kode
+        stringArray: true,            // Mengenkripsi teks/API Key
         stringArrayRotate: true,
-        stringArrayThreshold: 0.75,
-        unicodeEscapeSequence: false  // DIMATIKAN: Biar verifikasi string lebih cepat
+        stringArrayShuffle: true,
+        stringArrayThreshold: 0.8,
+        splitStrings: true,           // Memecah string agar sulit dilacak
+        identifierNamesGenerator: 'hexadecimal' // Nama variabel jadi kode hexa
     }).getObfuscatedCode();
 
     htmlContent = htmlContent.replace(scriptRegex, `<script>${obfuscatedJs}</script>`);
@@ -40,8 +41,9 @@ const minifiedHtml = minify(htmlContent, {
     removeAttributeQuotes: true,
     collapseWhitespace: true,
     removeComments: true,
-    minifyCSS: true
+    minifyCSS: true,
+    minifyJS: false // Jangan minify lagi karena sudah di-obfuscate
 });
 
 fs.writeFileSync(htmlPath, minifiedHtml);
-console.log("✅ Berhasil! Proteksi sudah diseimbangkan.");
+console.log("✅ Berhasil! Kode sekarang sulit dibaca tapi tetap ringan.");
