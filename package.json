@@ -1,10 +1,8 @@
 {
-  "name": "suka-laundry-pro",
+  "name": "sukalaundry-pro",
   "version": "1.0.0",
-  "description": "Aplikasi Kasir Suka Laundry Pro",
-  "main": "index.js",
   "scripts": {
-    "build-prod": "javascript-obfuscator ./www --output ./www --compact true --self-defending true"
+    "build": "npx javascript-obfuscator www --output www --compact true --self-defending true --string-array true --rotate-string-array true --string-array-threshold 0.75"
   },
   "dependencies": {
     "@capacitor/android": "^5.0.0",
