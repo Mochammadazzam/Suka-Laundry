@@ -1,17 +1,15 @@
 {
-  "name": "suka-laundry-pro",
-  "version": "1.0.0",
-  "description": "Aplikasi Kasir Laundry Profesional",
-  "main": "index.html",
-  "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/app": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "@capacitor/filesystem": "^6.0.0",
-    "@capacitor/share": "^6.0.0",
-    "@capacitor-community/bluetooth-le": "^6.0.0"
+  "appId": "com.sukalaundry.pro",
+  "appName": "Suka Laundry Pro",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
   },
-  "devDependencies": {
-    "@capacitor/cli": "^6.0.0"
+  "android": {
+    "buildOptions": {
+      "releaseType": "APK",
+      "minifyEnabled": true,
+      "shrinkResources": true
+    }
   }
 }
