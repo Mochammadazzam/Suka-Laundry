@@ -29,7 +29,6 @@ jobs:
 
       - name: Inject Bluetooth Permissions
         run: |
-          # Menyisipkan izin hardware ke AndroidManifest
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' android/app/src/main/AndroidManifest.xml
@@ -38,7 +37,7 @@ jobs:
 
       - name: Enable ProGuard (Anti-Decompile Native)
         run: |
-          # Mengaktifkan pengacakan kode Java/Native
+          # Tetap aktifkan proteksi meskipun mode debug
           sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
           sed -i 's/proguardFiles/shrinkResources true\n            proguardFiles/g' android/app/build.gradle
 
@@ -48,14 +47,15 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Build APK
+      - name: Build APK (Debug Mode - Auto Signed)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          # Kita gunakan assembleDebug agar APK valid untuk langsung diinstal
+          ./gradlew assembleDebug
 
       - name: Upload APK Result
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-Release
-          path: android/app/build/outputs/apk/release/*.apk
+          name: Suka-Laundry-Pro-Installable
+          path: android/app/build/outputs/apk/debug/app-debug.apk
