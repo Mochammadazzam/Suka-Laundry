@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Dependencies
+      - name: Install Tools
         run: |
           npm install
           npm install -g @capacitor/cli
@@ -25,14 +25,14 @@ jobs:
           mkdir -p www
           cp index.html www/
 
-      - name: Capacitor Add Android
+      - name: Initialize Capacitor
         run: |
           npx cap add android
           npx cap sync android
 
-      - name: Inject Bluetooth Permissions (Android 12-14 Fix)
+      - name: Unlock Bluetooth Bridge (Android 12-14 Fix)
         run: |
-          # Hapus Manifest lama dan timpa dengan yang punya izin lengkap
+          # Ini bagian paling krusial agar navigator.bluetooth di HTML-mu aktif
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -47,15 +47,14 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
+                  android:label="Suka Laundry Pro"
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/AppTheme">
                   <activity
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
                       android:name="com.sukalaundry.pro.MainActivity"
-                      android:label="@string/title_activity_main"
                       android:exported="true"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
                       android:launchMode="singleTop">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -72,7 +71,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build APK
+      - name: Final Build APK
         run: |
           cd android
           chmod +x gradlew
@@ -81,5 +80,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-V2
+          name: Suka-Laundry-Pro-V3
           path: android/app/build/outputs/apk/debug/app-debug.apk
