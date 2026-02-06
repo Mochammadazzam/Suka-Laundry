@@ -1,4 +1,5 @@
 name: Build Android APK
+
 on:
   push:
     branches: [ main ]
@@ -7,45 +8,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v3
 
-      - name: Set up Java JDK 17
-        uses: actions/setup-java@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          node-version: 18
 
-      - name: Install Node.js Dependencies
+      - name: Install Dependencies
         run: npm install
 
-      - name: Prepare Web Assets
-        run: |
-          # Memastikan folder www ada sebelum disinkronkan oleh Capacitor
-          mkdir -p www
-          echo "Syncing web assets..."
+      - name: Anti-Decompile (Obfuscation)
+        run: npm run build
 
-      - name: Capacitor Android Sync
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Capacitor Sync
         run: |
-          # Menambahkan platform android jika belum ada
-          npx cap add android || true
-          # Menyalin isi folder www ke folder native android
+          npx cap add android
           npx cap sync android
 
-      - name: Inject Bluetooth Permissions to Manifest
+      - name: Build APK with Gradle
         run: |
-          # TUMPANG TINDIH: Menyuntikkan izin Bluetooth ke dalam AndroidManifest.xml otomatis
-          # Perintah ini mencari baris <application dan menyisipkan izin di atasnya
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Build Debug APK
-        run: |
-          # Masuk ke folder android dan jalankan gradle build
-          cd android && ./gradlew assembleDebug
-
-      - name: Upload Artifact APK
-        uses: actions/upload-artifact@v4
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: SukaLaundry-Pro-Release
+          name: Suka-Laundry-Pro-Release
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
