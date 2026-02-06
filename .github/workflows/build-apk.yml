@@ -1,4 +1,4 @@
-name: Build Protected APK
+name: Build Suka Laundry Pro
 
 on:
   push:
@@ -19,25 +19,26 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Protect Code (Obfuscation)
+      - name: Apply Web Protection
         run: npm run build
 
-      - name: Initialize Capacitor Android
+      - name: Setup Android Project
         run: |
           npx cap add android || true
           npx cap sync android
 
-      - name: Inject Bluetooth Permissions
+      - name: Inject Permissions & Hardware Access
         run: |
+          # Menyisipkan izin Bluetooth & Lokasi secara paksa ke Manifest
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Enable ProGuard (Anti-Decompile Native)
+      - name: Native Obfuscation (R8)
         run: |
-          # Tetap aktifkan proteksi meskipun mode debug
+          # Mengaktifkan proteksi kode Java/Native
           sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
           sed -i 's/proguardFiles/shrinkResources true\n            proguardFiles/g' android/app/build.gradle
 
@@ -47,15 +48,14 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Build APK (Debug Mode - Auto Signed)
+      - name: Build Installable APK
         run: |
           cd android
           chmod +x gradlew
-          # Kita gunakan assembleDebug agar APK valid untuk langsung diinstal
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug # Debug mode agar APK ter-sign otomatis dan valid
 
-      - name: Upload APK Result
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-Installable
+          name: Suka-Laundry-Pro-FINAL
           path: android/app/build/outputs/apk/debug/app-debug.apk
