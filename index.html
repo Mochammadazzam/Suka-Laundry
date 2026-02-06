@@ -516,30 +516,38 @@
         // 1. FUNGSI SAMBUNG PRINTER (btConnect)
                          // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI FIX
         async function btConnect() {
-            const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+    if (isNative && typeof BluetoothLe !== 'undefined') {
+        try {
+            // 1. Pastikan Bluetooth di-reset (Clean Start)
+            try {
+                await BluetoothLe.initialize();
+            } catch(e) { /* sudah initialize, abaikan */ }
 
-            if (isNative && BluetoothLe) {
-                try {
-                    // LANGSUNG PANGGIL IZIN DI SINI
-                    await BluetoothLe.requestPermissions(); 
-                    
-                    await BluetoothLe.initialize();
-                    const enabled = await BluetoothLe.isEnabled();
-                    if (!enabled.value) await BluetoothLe.enable();
+            // 2. Paksa stop scan sebelumnya jika ada yang nyangkut
+            try { await BluetoothLe.stopScan(); } catch(e) {}
 
-                    const device = await BluetoothLe.requestDevice({ services: [] });
-                    if (device) {
-                        app.printDevice = device; 
-                        app.isNativeBT = true;
-                        document.getElementById('btn-printer').style.color = 'var(--success)';
-                        showMessage("Printer Terhubung!");
-                    }
-                } catch (e) {
-                    console.error(e);
-                    showMessage("Koneksi Bluetooth Gagal");
-                }
-            } 
+            // 3. Minta izin ulang (penting untuk Android 13+)
+            await BluetoothLe.requestPermissions();
 
+            // 4. Buka panel Scan
+            const device = await BluetoothLe.requestDevice({
+                displayAllDevices: true,
+                optionalServices: [SERVICE_UUID] // Pastikan SERVICE_UUID '18f0' atau milik printermu
+            });
+
+            if (device && device.deviceId) {
+                app.printDevice = device;
+                // Lakukan koneksi ke deviceId
+                await BluetoothLe.connect({ deviceId: device.deviceId });
+                
+                document.getElementById('btn-printer').style.color = '#2ecc71'; // Hijau jika konek
+                showMessage("Printer Terhubung!");
+            }
+        } catch (e) {
+            console.error("BT Error:", e);
+            showMessage("Scan Dibatalkan/Gagal");
+        }
+    } 
             else if (navigator.bluetooth) {
                 try {
                     const device = await navigator.bluetooth.requestDevice({
