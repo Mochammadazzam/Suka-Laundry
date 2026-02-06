@@ -136,8 +136,27 @@ input, textarea {
 }
         .modal { background: var(--surface); width: 100%; border-radius: 25px; padding: 25px; max-height: 90vh; overflow-y: auto; }
 
-        #notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #1E293B; color: white; padding: 12px 24px; border-radius: 50px; font-weight: 600; z-index: 9999; transition: 0.5s; }
-        #notification.show { transform: translateX(-50%) translateY(0); }
+ #notification { 
+    position: fixed; 
+    top: 20px; 
+    left: 50%; 
+    transform: translateX(-50%) translateY(-100px); 
+    background: #1E293B; 
+    color: white; 
+    padding: 12px 24px; 
+    border-radius: 50px; 
+    font-weight: 600; 
+    z-index: 999999; 
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    opacity: 0;
+    pointer-events: none;
+}
+#notification.show { 
+    transform: translateX(-50%) translateY(0); 
+    opacity: 1;
+}
+
 
         .pill-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 5px; margin-bottom: 15px; scrollbar-width: none; }
         .pill { padding: 8px 16px; border-radius: 50px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; color: var(--text-light); transition: 0.2s; }
@@ -542,20 +561,21 @@ input, textarea {
         };
 
       // 1. Fungsi Koneksi Bluetooth via Native Android
+// TUMPANG TINDIH / GANTI FUNGSI btConnect LAMA DENGAN INI
 async function btConnect() {
     if (window.AndroidInterface && window.AndroidInterface.openConnection) {
         try {
-            // Meminta Android membuka dialog pemilihan printer
             const result = await window.AndroidInterface.openConnection();
             if (result === "connected") {
                 document.getElementById('btn-printer').style.color = 'var(--success)';
                 showMessage("Printer Terhubung!");
             }
         } catch (e) {
-            showMessage("Gagal menghubungkan printer");
+            showMessage("Gagal Hubungkan Bluetooth");
         }
     } else {
-        showMessage("Gunakan aplikasi Android untuk fitur ini");
+        // Ini pesan yang kamu minta: muncul sebentar lalu hilang
+        showMessage("Hubungkan");
     }
 }
 
@@ -666,7 +686,37 @@ async function printThermalInvoice() {
     openModal('confirm');
 }
 
-        function showMessage(m) { const n = document.getElementById('notification'); n.innerText = m; n.classList.add('show'); setTimeout(() => n.classList.remove('show'), 2000); }
+        // TUMPANG TINDIH / GANTI FUNGSI function showMessage(m) { 
+    const n = document.getElementById('notification'); 
+    if (!n) return;
+    n.innerText = m; 
+    n.classList.add('show'); 
+    if (window.msgTimer) clearTimeout(window.msgTimer);
+    window.msgTimer = setTimeout(() => { 
+        n.classList.remove('show'); 
+    }, 2000); 
+}
+
+async function btConnect() {
+    // Deteksi Capacitor
+    const isNative = window.hasOwnProperty('Capacitor');
+    
+    if (isNative) {
+        try {
+            // Logika Bridge Bluetooth Capacitor
+            // await BluetoothLe.initialize();
+            showMessage("Mencari Perangkat...");
+        } catch (e) {
+            showMessage("Bluetooth Gagal / Mati");
+        }
+    } else {
+        // Pop-up yang kamu minta agar muncul & hilang otomatis
+        showMessage("Hubungkan");
+    }
+}
+
+
+
         function closeModal() { document.querySelectorAll('.modal-bg').forEach(m => m.classList.remove('active')); }
         function openModal(m) { document.getElementById('modal-'+m).classList.add('active'); }
         function isSameDay(d1, d2) { return d1.toDateString() === d2.toDateString(); }
