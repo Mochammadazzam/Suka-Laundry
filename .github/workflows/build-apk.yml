@@ -1,5 +1,4 @@
-name: Build Simple Suka Laundry
-
+name: Build Android APK
 on:
   push:
     branches: [ main ]
@@ -8,45 +7,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: set up JDK 11
+        uses: actions/setup-java@v3
         with:
-          node-version: 18
+          java-version: '11'
+          distribution: 'temurin'
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Setup Android Project
+      - name: Build Web Assets
+        run: npm run build # Pastikan script build ada di package.json
+
+      - name: Capacitor Sync
         run: |
-          npx cap add android || true
+          npx cap add android
           npx cap sync android
 
-      - name: Inject Permissions
+      - name: Inject Bluetooth Permissions
         run: |
-          sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          # Perintah sed ini menyuntikkan izin Bluetooth tepat sebelum tag <application> di AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
-
-      - name: Build Debug APK
+      - name: Build Android APK
         run: |
-          cd android
-          chmod +x gradlew
-          # Paksa Gradle untuk tidak melakukan optimasi kode
-          ./gradlew assembleDebug -Dorg.gradle.daemon=false
+          cd android && ./gradlew assembleDebug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: Suka-Laundry-Simple
+          name: app-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
