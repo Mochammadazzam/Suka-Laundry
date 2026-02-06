@@ -3,46 +3,39 @@ const path = require('path');
 const JavaScriptObfuscator = require('javascript-obfuscator');
 const minify = require('html-minifier').minify;
 
-// Lokasi index.html kamu
 const htmlPath = path.join(__dirname, 'www', 'index.html');
 
 if (!fs.existsSync(htmlPath)) {
-    console.error("❌ Error: index.html tidak ditemukan di folder www!");
+    console.error("❌ Error: index.html tidak ditemukan!");
     process.exit(1);
 }
 
-console.log("🚀 Memulai proteksi kode (Anti-Decompile)...");
+console.log("🚀 Mengoptimalkan proteksi agar instalasi lebih cepat...");
 let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
-// 1. Ekstrak bagian <script>
 const scriptRegex = /<script>([\s\S]*?)<\/script>/;
 const match = htmlContent.match(scriptRegex);
 
 if (match && match[1]) {
-    console.log("🔒 Mengacak JavaScript...");
     const originalJs = match[1];
 
+    // Konfigurasi yang diseimbangkan: Tetap sulit dibaca, tapi ramah prosesor HP
     const obfuscatedJs = JavaScriptObfuscator.obfuscate(originalJs, {
         compact: true,
-        controlFlowFlattening: true,
-        controlFlowFlatteningThreshold: 1,
-        deadCodeInjection: true,
-        deadCodeInjectionThreshold: 0.4,
-        debugProtection: true, // Membuat hang jika di-debug/inspect
-        debugProtectionInterval: 2000,
-        disableConsoleOutput: true,
-        selfDefending: true, // Kode rusak jika dirapikan (prettify)
-        stringArray: true,
+        controlFlowFlattening: false, // DIMATIKAN: Ini penyebab utama instalasi lama
+        deadCodeInjection: false,     // DIMATIKAN: Agar ukuran & verifikasi lebih ringan
+        debugProtection: true,        // TETAP AKTIF: Biar tidak bisa di-inspect
+        disableConsoleOutput: true,   // TETAP AKTIF
+        selfDefending: true,          // TETAP AKTIF
+        stringArray: true,            // TETAP AKTIF: Menyembunyikan teks/string
         stringArrayRotate: true,
-        stringArrayThreshold: 0.8,
-        unicodeEscapeSequence: true
+        stringArrayThreshold: 0.75,
+        unicodeEscapeSequence: false  // DIMATIKAN: Biar verifikasi string lebih cepat
     }).getObfuscatedCode();
 
     htmlContent = htmlContent.replace(scriptRegex, `<script>${obfuscatedJs}</script>`);
 }
 
-// 2. Minify HTML & CSS
-console.log("📦 Mengecilkan ukuran HTML & CSS...");
 const minifiedHtml = minify(htmlContent, {
     removeAttributeQuotes: true,
     collapseWhitespace: true,
@@ -51,4 +44,4 @@ const minifiedHtml = minify(htmlContent, {
 });
 
 fs.writeFileSync(htmlPath, minifiedHtml);
-console.log("✅ SELESAI: index.html sekarang sudah terenkripsi.");
+console.log("✅ Berhasil! Proteksi sudah diseimbangkan.");
