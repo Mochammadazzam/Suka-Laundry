@@ -541,123 +541,74 @@ input, textarea {
             printDevice: null, printCharacteristic: null, memberSpecificFilter: null
         };
 
-        // BLUETOOTH PRINTER LOGIC
-        async function btConnect() {
-    // 1. Pastikan Bluetooth Aktif via Java
-    if (window.AndroidInterface && window.AndroidInterface.turnOnBluetooth) {
-        window.AndroidInterface.turnOnBluetooth();
-        // Beri jeda sedikit agar sistem Android punya waktu menyalakan hardware
-        await new Promise(r => setTimeout(r, 500));
-    }
-
-    // 2. Jalankan pairing (Hanya jalan jika WebView mendukung Web Bluetooth)
-    try {
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
-            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-        });
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        app.printCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-        app.printDevice = device;
-        document.getElementById('btn-printer').style.color = 'var(--success)';
-        showMessage("Printer Terhubung!");
-    } catch (e) {
-        console.error(e);
-        // Tampilkan pesan yang lebih edukatif untuk user APK
-        showMessage("Klik 'Izinkan' atau hubungkan via setelan Bluetooth HP");
+      // 1. Fungsi Koneksi Bluetooth via Native Android
+async function btConnect() {
+    if (window.AndroidInterface && window.AndroidInterface.openConnection) {
+        try {
+            // Meminta Android membuka dialog pemilihan printer
+            const result = await window.AndroidInterface.openConnection();
+            if (result === "connected") {
+                document.getElementById('btn-printer').style.color = 'var(--success)';
+                showMessage("Printer Terhubung!");
+            }
+        } catch (e) {
+            showMessage("Gagal menghubungkan printer");
+        }
+    } else {
+        showMessage("Gunakan aplikasi Android untuk fitur ini");
     }
 }
 
-
-        async function printThermal(text) {
-            if (!app.printCharacteristic) return showMessage("Printer belum terhubung!");
-            const encoder = new TextEncoder();
-            const chunks = text.match(/.{1,20}/g) || [];
-            for (const chunk of chunks) {
-                await app.printCharacteristic.writeValue(encoder.encode(chunk));
-            }
-        }
-
-      async function printThermalInvoice() {
-    // 1. Validasi data dan koneksi
-    if (!app.currentTx || !app.printCharacteristic) {
-        return showMessage("Printer Belum Terhubung!");
+// 2. Fungsi Cetak Nota via Native Android
+async function printThermalInvoice() {
+    if (!app.currentTx) return showMessage("Pilih transaksi dulu!");
+    
+    // Pastikan interface tersedia
+    if (!window.AndroidInterface || !window.AndroidInterface.printText) {
+        return showMessage("Fitur cetak hanya tersedia di aplikasi");
     }
 
     try {
         const t = app.currentTx;
-        const enc = new TextEncoder();
-        
-        // Ambil data profil dari settings
         const brand = (app.settings.name || 'Suka Laundry').toUpperCase();
         const addr = app.settings.address || '';
         const phone = app.settings.phone || '';
-
-        // ESC/POS Commands (Standard & Safe)
-        const init = '\x1B\x40';
-        const center = '\x1B\x61\x01';
-        const left = '\x1B\x61\x00';
-        const normalFont = '\x1B\x21\x00';
-        const boldOn = '\x1B\x45\x01';
-        const boldOff = '\x1B\x45\x00';
-
-        // Susun Text Struk
-        let txt = init + center + normalFont + brand + "\n";
-        if (addr) txt += addr + "\n";
-        if (phone) txt += "WA: " + phone + "\n";
-        txt += "--------------------------------\n" + left;
-        
-        // Info Transaksi
         const tgl = t.createdAt ? t.createdAt.toDate().toLocaleDateString('id-ID') : '-';
+
+        // Susun string nota dengan format standar ESC/POS 32 karakter
+        let txt = "";
+        txt += "[C]" + brand + "\n"; // [C] = Center (biasanya dihandle di Java)
+        if (addr) txt += "[C]" + addr + "\n";
+        if (phone) txt += "[C]WA: " + phone + "\n";
+        txt += "--------------------------------\n";
         txt += "Nota : " + t.invoice + "\n";
         txt += "Tgl  : " + tgl + "\n";
         txt += "Plg  : " + t.member.name.toUpperCase() + "\n";
         txt += "--------------------------------\n";
-        
-        // Looping Items (Layanan)
+
         t.items.forEach(i => {
-            let line1 = i.serviceName.substring(0, 32);
-            // Format: "1.0 Kg           Rp4.000" (Total 32 karakter)
+            txt += i.serviceName.toUpperCase().substring(0, 32) + "\n";
             let qtyStr = i.qty + " " + i.unit;
             let priceStr = "Rp" + i.subtotal.toLocaleString('id-ID');
             let spaces = 32 - qtyStr.length - priceStr.length;
-            let line2 = qtyStr + " ".repeat(spaces > 0 ? spaces : 1) + priceStr;
-            txt += line1.toUpperCase() + "\n" + line2 + "\n";
+            txt += qtyStr + " ".repeat(spaces > 0 ? spaces : 1) + priceStr + "\n";
         });
-        
+
         txt += "--------------------------------\n";
-        
-        // Total (Rata Kanan)
-        let totalVal = "Rp " + t.totalPrice.toLocaleString('id-ID');
+        let totalVal = "Rp" + t.totalPrice.toLocaleString('id-ID');
         let totalLabel = "TOTAL:";
         let totalSpaces = 32 - totalLabel.length - totalVal.length;
-        txt += boldOn + totalLabel + " ".repeat(totalSpaces > 0 ? totalSpaces : 1) + totalVal + boldOff + "\n";
-        
-        // Status & Catatan
+        txt += "[B]" + totalLabel + " ".repeat(totalSpaces > 0 ? totalSpaces : 1) + totalVal + "\n";
         txt += "Status: " + t.status + "\n";
-        if (t.note) {
-            txt += "Catatan: " + t.note + "\n";
-        }
+        txt += "--------------------------------\n";
+        txt += "[C]Terima Kasih\n\n\n";
 
-        txt += "--------------------------------\n" + center;
-        txt += "Terima Kasih\n\n\n\n\n"; // Feed kertas agar bisa disobek
-
-        // 2. Proses Pengiriman Data (Metode Chunking sesuai referensi)
-        let data = enc.encode(txt);
-        const CHUNK_SIZE = 20;
-        
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-            let chunk = data.slice(i, i + CHUNK_SIZE);
-            await app.printCharacteristic.writeValue(chunk);
-            // Jeda 20ms agar printer tidak overload (sesuai referensi coding kamu)
-            await new Promise(r => setTimeout(r, 20));
-        }
-        
-        showMessage("Mencetak Struk...");
-    } catch (e) { 
+        // Kirim string ke Android untuk dicetak
+        await window.AndroidInterface.printText(txt);
+        showMessage("Mencetak...");
+    } catch (e) {
         console.error(e);
-        showMessage("Printer Error!"); 
+        showMessage("Gagal mencetak!");
     }
 }
 
@@ -1698,5 +1649,3 @@ window.onload = async () => {
 </script>
 </body>
 </html>
-
-
