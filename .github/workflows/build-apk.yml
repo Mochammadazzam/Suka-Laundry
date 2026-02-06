@@ -36,28 +36,28 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
-      - name: Force Android Manifest & SDK 34 Fix
+      - name: Total Gradle & SDK Fix (API 34 + Kotlin Fix)
         run: |
-          # 1. Paksa API 34 di variables.gradle
+          # 1. Paksa API 34 & Versi Kotlin di variables.gradle
+          # Kita pakai Kotlin 1.9.10 agar stabil dengan Android Gradle Plugin 8.0.0
           sed -i 's/compileSdkVersion = 33/compileSdkVersion = 34/g' android/variables.gradle
           sed -i 's/targetSdkVersion = 33/targetSdkVersion = 34/g' android/variables.gradle
+          sed -i 's/kotlinDefaultVersion = .*/kotlinDefaultVersion = "1.9.10"/g' android/variables.gradle
           
-          # 2. Paksa API 34 di build.gradle utama
-          sed -i 's/compileSdk 33/compileSdk 34/g' android/app/build.gradle || true
-          sed -i 's/targetSdk 33/targetSdk 34/g' android/app/build.gradle || true
+          # 2. Tambahkan baris penekan peringatan SDK di gradle.properties
+          echo "android.suppressUnsupportedCompileSdk=34" >> android/gradle.properties
           
-          # 3. Suntik Izin Bluetooth & Lokasi ke AndroidManifest.xml
+          # 3. Suntik Izin Bluetooth ke Manifest (Penting untuk Panel Pencarian)
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           PERMISSIONS="<uses-permission android:name=\"android.permission.BLUETOOTH\" />\n    <uses-permission android:name=\"android.permission.BLUETOOTH_ADMIN\" />\n    <uses-permission android:name=\"android.permission.BLUETOOTH_SCAN\" />\n    <uses-permission android:name=\"android.permission.BLUETOOTH_CONNECT\" />\n    <uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />"
-          
-          # Mencari tag <application dan menyisipkan izin tepat di atasnya
           sed -i "/<application/i \    $PERMISSIONS" $MANIFEST
 
       - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # Menjalankan build dengan flag tambahan untuk menangani duplikasi class jika ada
+          ./gradlew assembleDebug -Pandroid.useAndroidX=true -Pandroid.enableJetifier=true
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
