@@ -2,7 +2,10 @@
   "appId": "com.sukalaundry.pro",
   "appName": "Suka Laundry Pro",
   "webDir": "www",
-  "server": {
-    "androidScheme": "https"
+  "bundledWebRuntime": false,
+  "loggingBehavior": "none",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
   }
 }
