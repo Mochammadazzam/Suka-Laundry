@@ -519,38 +519,57 @@
 
     if (isNative && typeof BluetoothLe !== 'undefined') {
         try {
-            try { await BluetoothLe.initialize(); } catch(e) {}
+            // 1. Inisialisasi dulu (Wajib)
+            try { await BluetoothLe.initialize(); } catch(e) { console.log("BT Init skip"); }
 
-            const status = await BluetoothLe.isEnabled();
-            
-            if (!status.value) {
-                showMessage("Harap nyalakan Bluetooth HP...");
-                await BluetoothLe.enable(); 
-                await new Promise(r => setTimeout(r, 1000));
-            }
-
-            try { await BluetoothLe.stopScan(); } catch(e) {}
-
+            // 2. Minta Izin (Android 12+ butuh izin BLUETOOTH_SCAN & CONNECT)
+            // Ini yang sering bikin panel scan tidak muncul
             await BluetoothLe.requestPermissions();
 
+            // 3. Cek apakah Bluetooth menyala
+            let status = await BluetoothLe.isEnabled();
+            
+            if (!status.value) {
+                showMessage("Meminta aktivasi Bluetooth...");
+                try {
+                    // Paksa nyalakan (Hanya di Android)
+                    await BluetoothLe.enable(); 
+                    // Tunggu sebentar sampai hardware benar-benar siap
+                    await new Promise(r => setTimeout(r, 2000));
+                } catch(err) {
+                    return showMessage("Mohon nyalakan Bluetooth secara manual di pengaturan HP!");
+                }
+            }
+
+            // 4. Pastikan scan sebelumnya berhenti agar tidak bentrok
+            try { await BluetoothLe.stopScan(); } catch(e) {}
+
+            // 5. Munculkan Panel Scan
+            // Gunakan requestDevice tanpa filter UUID dulu untuk memastikan panel muncul
             const device = await BluetoothLe.requestDevice({
-                displayAllDevices: true
+                displayAllDevices: true 
             });
 
             if (device && device.deviceId) {
                 app.printDevice = device;
                 app.isNativeBT = true;
                 
+                showMessage("Menyambungkan...");
                 await BluetoothLe.connect({ deviceId: device.deviceId });
                 
-                document.getElementById('btn-printer').style.color = '#2ecc71';
+                document.getElementById('btn-printer').style.color = '#10B981'; // Hijau sukses
                 showMessage("Printer Terhubung!");
             }
         } catch (e) {
-            console.error(e);
-            showMessage("Gagal membuka pencarian printer");
+            console.error("BT Error:", e);
+            if (e.message && e.message.includes("cancelled")) {
+                showMessage("Pencarian dibatalkan");
+            } else {
+                showMessage("Izin Bluetooth ditolak atau Device tidak mendukung");
+            }
         }
     } else if (navigator.bluetooth) {
+        // Logika untuk Web Browser (Chrome/Edge)
         try {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ services: [SERVICE_UUID] }],
@@ -561,16 +580,17 @@
             app.printCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
             app.printDevice = device;
             app.isNativeBT = false;
-            document.getElementById('btn-printer').style.color = '#2ecc71';
+            document.getElementById('btn-printer').style.color = '#10B981';
             showMessage("Printer Terhubung (Web)!");
         } catch (e) {
             console.error(e);
             showMessage("Koneksi Web Gagal");
         }
     } else {
-        showMessage("Bluetooth tidak didukung");
+        showMessage("Perangkat Anda tidak mendukung Bluetooth");
     }
 }
+
 
         // 2. FUNGSI CETAK STRUK (printThermalInvoice)
         async function printThermalInvoice() {
