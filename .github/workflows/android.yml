@@ -25,11 +25,16 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
-
       - name: Inject Permissions (Android 14 Ready)
         run: |
-          # Menyisipkan izin bluetooth langsung ke file manifest Android
-          sed -i '/<application/i <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i \
+          <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
+          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
+          <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
+
 
       - name: Build APK Debug
         run: |
