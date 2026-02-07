@@ -62,22 +62,25 @@
 
         async function printStruk() {
     try {
-        log("Memulai proses cetak...");
-        
-        // 1. Konek ke perangkat
-        await BleClient.connect(deviceId);
-        log("Handshake berhasil...");
+        if (!deviceId) {
+            log("Error: ID Perangkat tidak ditemukan.");
+            return;
+        }
 
-        // 2. Cari Service & Characteristic secara otomatis
-        // Kita tidak menebak UUID, tapi mencari mana yang bisa menerima data (Properties: Write)
+        log("Menghubungkan...");
+        await BleClient.connect(deviceId);
+        log("Tersambung!");
+
+        // 1. Ambil list services & characteristics
         const services = await BleClient.getServices(deviceId);
         let targetService, targetChar;
 
-        for (const service of services) {
-            for (const char of service.characteristics) {
-                if (char.properties.write || char.properties.writeWithoutResponse) {
-                    targetService = service.uuid;
-                    targetChar = char.uuid;
+        // Mencari characteristic yang mendukung penulisan data
+        for (const s of services) {
+            for (const c of s.characteristics) {
+                if (c.properties.writeWithoutResponse || c.properties.write) {
+                    targetService = s.uuid;
+                    targetChar = c.uuid;
                     break;
                 }
             }
@@ -85,40 +88,52 @@
         }
 
         if (!targetService || !targetChar) {
-            throw new Error("Printer tidak mendukung protokol tulis data.");
+            throw new Error("Printer tidak mendukung jalur data.");
         }
 
-        log("Menemukan jalur: " + targetChar);
+        log("Jalur ditemukan!");
 
-        // 3. Siapkan Data ESC/POS
+        // 2. Siapkan perintah ESC/POS
         const encoder = new TextEncoder();
         const esc = "\x1B";
-        const init = esc + "@"; // Reset printer
-        const center = esc + "a" + "\x01";
-        const bold = esc + "E" + "\x01";
-        const reset = esc + "E" + "\x00" + esc + "a" + "\x00";
         
-        let text = init + center + bold + "MARKAS BEKAM\n" + reset;
+        let text = esc + "@"; // Initialize printer
+        text += esc + "a" + "\x01"; // Align center
+        text += esc + "E" + "\x01" + "MARKAS BEKAM\n" + esc + "E" + "\x00"; // Bold
         text += "--------------------------------\n";
         text += "Tes Print: BERHASIL\n";
-        text += "Sistem   : Capacitor 6\n";
+        text += "Sistem   : Android v14\n";
         text += "--------------------------------\n";
         text += "\n\n\n\n"; // Feed kertas
 
-        const data = encoder.encode(text);
+        // 3. KONVERSI WAJIB KE DATAVIEW
+        // Capacitor 6 butuh DataView, bukan Uint8Array langsung.
+        const encodedData = encoder.encode(text);
+        const dataView = new DataView(encodedData.buffer);
+
+        log("Mengirim data ke printer...");
 
         // 4. Kirim Data
-        log("Mengirim data ke head printer...");
-        await BleClient.writeWithoutResponse(deviceId, targetService, targetChar, data);
-        
-        log("SELESAI! Kertas seharusnya keluar.");
-        
-        // Putuskan koneksi setelah selesai agar printer bisa dipakai device lain
-        await BleClient.disconnect(deviceId);
+        await BleClient.writeWithoutResponse(
+            deviceId,
+            targetService,
+            targetChar,
+            dataView
+        );
+
+        log("Cetak selesai!");
+
+        // 5. Berikan jeda sebentar sebelum disconnect agar buffer printer tidak kaget
+        setTimeout(async () => {
+            await BleClient.disconnect(deviceId);
+            log("Koneksi diputus aman.");
+        }, 1500);
 
     } catch (err) {
         log("GAGAL: " + err.message);
-        console.error("Detail Error:", err);
+        console.error("Detail:", err);
+        // Pastikan disconnect kalau gagal supaya tidak nyangkut
+        try { await BleClient.disconnect(deviceId); } catch(e) {}
     }
 }
 
