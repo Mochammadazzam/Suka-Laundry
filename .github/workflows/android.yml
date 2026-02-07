@@ -13,28 +13,24 @@ jobs:
         with:
           java-version: '17'
           distribution: 'zulu'
-          # Cache dimatikan dulu untuk build pertama agar tidak bentrok dengan folder yang belum ada
-          # cache: 'gradle' 
 
-      - name: Install NPM Dependencies
+      - name: Install Dependencies
         run: npm install
 
-      - name: Prepare Web Build (Root to WWW)
+      - name: Prepare Web Build
         run: |
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Create Android Project & Sync
+      - name: Capacitor Sync
         run: |
-          # Pastikan platform android dibuat dari nol
-          npx cap add android || echo "Android folder already exists"
+          npx cap add android || echo "Exist"
           npx cap sync android
 
-      - name: Inject Bluetooth & Location Permissions
+      - name: Inject Anti-Gagal Permissions
         run: |
-          # Inject izin ke AndroidManifest.xml setelah folder android dibuat
-          # Menambahkan BLUETOOTH_ADVERTISE dan flag neverForLocation untuk stabilitas Android 12+
-          sed -i '/<application/i \
+          # [span_10](start_span)Inject izin tepat setelah tag <manifest>[span_10](end_span)
+          sed -i '/<manifest/a \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
@@ -44,19 +40,16 @@ jobs:
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
           <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
           
-          # Mengaktifkan Cleartext Traffic agar WebView bisa berkomunikasi lancar dengan plugin
+          # [span_11](start_span)Aktifkan trafik data untuk WebView[span_11](end_span)
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x android/gradlew
-
-      - name: Build APK Debug
+      - name: Build APK
         run: |
-          cd android
-          ./gradlew assembleDebug
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: EPPOS-SukaLaundry
+          name: SukaLaundry-Printer-Pro
           path: android/app/build/outputs/apk/debug/app-debug.apk
