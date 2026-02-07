@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPPOS Pro Tester</title>
+    <title>Suka Laundry Pro</title>
     <style>
         body { font-family: sans-serif; padding: 20px; text-align: center; background: #f0f2f5; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
         .btn-blue { background: #007bff; color: white; }
         .btn-green { background: #28a745; color: white; }
-        .btn-green:disabled { background: #ccc; cursor: not-allowed; }
-        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 120px; white-space: pre-wrap; overflow-y: auto; }
+        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 150px; white-space: pre-wrap; overflow-y: auto; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>EPPOS Printer Tester</h2>
-        <button class="btn-blue" onclick="runBluetooth()">1. AKTIFKAN & SCAN PRINTER</button>
-        <button id="btnPrint" class="btn-green" onclick="printStruk()" disabled>2. CETAK STRUK TES</button>
-        <div id="status">Status: Menunggu Klik...</div>
+        <h2>SUKA LAUNDRY PRINTER</h2>
+        <button class="btn-blue" onclick="runBluetooth()">1. SCAN & HUBUNGKAN</button>
+        <button id="btnPrint" class="btn-green" onclick="printStruk()" disabled>2. CETAK STRUK</button>
+        <div id="status">Status: Siap...</div>
     </div>
 
     <script>
-    // Gunakan window agar variabel menempel permanen di session browser
     window.selectedDeviceId = null; 
 
     function log(msg) {
@@ -32,131 +30,77 @@
         status.scrollTop = status.scrollHeight;
     }
 
-    function getBleClient() {
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
-            return window.Capacitor.Plugins.BluetoothLe;
-        }
-        return null;
-    }
-
     async function runBluetooth() {
-        const BleClient = getBleClient();
-        if (!BleClient) { log("ERROR: Plugin tidak ada."); return; }
-
+        const BleClient = window.Capacitor.Plugins.BluetoothLe;
         try {
-            await BleClient.initialize();
             log("Inisialisasi...");
-
-            const isEnabled = await BleClient.isEnabled();
-            if (!isEnabled) {
-                log("Bluetooth mati. Mengaktifkan...");
-                await BleClient.requestEnable();
-            }
-
-            log("Mencari perangkat...");
+            await BleClient.initialize({ androidNeverForLocation: true });
+            
+            log("Mencari Printer...");
             const device = await BleClient.requestDevice({ acceptAllDevices: true });
             
             if (device && device.deviceId) {
-                // SIMPAN KE WINDOW VARIABLE
                 window.selectedDeviceId = device.deviceId; 
-                log("TERHUBUNG KE: " + (device.name || "Printer"));
-                log("ID DISIMPAN: " + window.selectedDeviceId);
-                
+                log("TERHUBUNG: " + (device.name || "EPPOS"));
                 document.getElementById('btnPrint').disabled = false;
-                alert("Printer Terhubung!");
             }
-        } catch (err) {
-            log("ERROR: " + err.message);
-        }
+        } catch (err) { log("ERR: " + err.message); }
     }
 
-            async function printStruk() {
-    const BleClient = getBleClient();
-    const currentId = window.selectedDeviceId;
-
-    try {
-        if (!currentId) {
-            log("GAGAL: Scan printer dulu.");
-            return;
-        }
-
-        log("Menghubungkan...");
-        await BleClient.connect({ deviceId: currentId });
-        log("Handshake Berhasil!");
-
-        log("Mencari jalur data...");
-        const result = await BleClient.getServices({ deviceId: currentId });
-        const services = Array.isArray(result) ? result : (result.services || []);
-        
-        let targetService = "000018f0-0000-1000-8000-00805f9b34fb"; 
-        let targetChar = "00002af1-0000-1000-8000-00805f9b34fb";    
-        let found = false;
-
-        for (const s of services) {
-            for (const c of s.characteristics) {
-                if (c.properties.writeWithoutResponse || c.properties.write) {
-                    targetService = s.uuid;
-                    targetChar = c.uuid;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        log("Gunakan Jalur: " + targetChar.substring(0,8));
-
-        log("Menyiapkan teks...");
-        const encoder = new TextEncoder();
-        const esc = "\x1B";
-        let text = esc + "@"; 
-        text += esc + "a" + "\x01" + esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00"; 
-        text += "--------------------------------\n";
-        text += "Tes Cetak : BERHASIL!\n";
-        text += "Waktu     : " + new Date().toLocaleTimeString() + "\n";
-        text += "--------------------------------\n";
-        text += "\n\n\n\n\n"; // Tambah feed lebih banyak agar mudah disobek
-
-        const uint8array = encoder.encode(text);
-        log("Mengirim data...");
+    async function printStruk() {
+        const BleClient = window.Capacitor.Plugins.BluetoothLe;
+        const currentId = window.selectedDeviceId;
 
         try {
+            log("Menghubungkan...");
+            await BleClient.connect({ deviceId: currentId });
+
+            const result = await BleClient.getServices({ deviceId: currentId });
+            const services = result.services || [];
+            
+            let s_uuid = "000018f0-0000-1000-8000-00805f9b34fb";
+            let c_uuid = "00002af1-0000-1000-8000-00805f9b34fb";
+            let found = false;
+
+            for (const s of services) {
+                for (const c of s.characteristics) {
+                    if (c.properties.writeWithoutResponse || c.properties.write) {
+                        s_uuid = s.uuid; c_uuid = c.uuid; found = true; break;
+                    }
+                }
+                if (found) break;
+            }
+
+            const encoder = new TextEncoder();
+            const esc = "\x1B";
+            let text = esc + "@" + esc + "a" + "\x01" + esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00"; 
+            text += "--------------------------------\n";
+            text += "STATUS : BERHASIL\n";
+            text += "--------------------------------\n\n\n\n\n"; 
+
+            const uint8 = encoder.encode(text);
+            log("Mengirim data...");
+
+            // METODE PALING AMAN: Gunakan DataView langsung
             await BleClient.writeWithoutResponse({
                 deviceId: currentId,
-                service: targetService,
-                characteristic: targetChar,
-                value: new DataView(uint8array.buffer)
+                service: s_uuid,
+                characteristic: c_uuid,
+                value: new DataView(uint8.buffer)
             });
-            log("CETAK SELESAI!");
-        } catch (e) {
-            log("Mencoba fallback...");
-            const base64Data = btoa(String.fromCharCode(...uint8array));
-            await BleClient.write({
-                deviceId: currentId,
-                service: targetService,
-                characteristic: targetChar,
-                value: base64Data
-            });
-            log("CETAK SELESAI (Alt)!");
-        }
 
-        // PERBAIKAN: Beri waktu 5 detik agar printer selesai memproses kertas
-        setTimeout(async () => {
-            try {
+            log("CETAK SELESAI!");
+            
+            setTimeout(async () => {
                 await BleClient.disconnect({ deviceId: currentId });
                 log("Koneksi ditutup.");
-            } catch(e) {}
-        }, 5000); 
+            }, 3000);
 
-    } catch (err) {
-        log("GAGAL: " + err.message);
-        if (currentId) {
+        } catch (err) {
+            log("GAGAL: " + err.message);
             try { await BleClient.disconnect({ deviceId: currentId }); } catch(e) {}
         }
     }
-}
-
-
-</script>
+    </script>
 </body>
 </html>
