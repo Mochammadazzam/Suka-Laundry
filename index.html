@@ -23,122 +23,115 @@
     </div>
 
     <script>
-        let deviceId = null;
+    // Gunakan window agar variabel menempel permanen di session browser
+    window.selectedDeviceId = null; 
 
-        function log(msg) {
-            const status = document.getElementById('status');
-            status.innerText += "\n> " + msg;
-            status.scrollTop = status.scrollHeight;
+    function log(msg) {
+        const status = document.getElementById('status');
+        status.innerText += "\n> " + msg;
+        status.scrollTop = status.scrollHeight;
+    }
+
+    function getBleClient() {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
+            return window.Capacitor.Plugins.BluetoothLe;
         }
+        return null;
+    }
 
-        // Fungsi pembantu untuk ambil Plugin secara aman
-        function getBleClient() {
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
-                return window.Capacitor.Plugins.BluetoothLe;
+    async function runBluetooth() {
+        const BleClient = getBleClient();
+        if (!BleClient) { log("ERROR: Plugin tidak ada."); return; }
+
+        try {
+            await BleClient.initialize();
+            log("Inisialisasi...");
+
+            const isEnabled = await BleClient.isEnabled();
+            if (!isEnabled) {
+                log("Bluetooth mati. Mengaktifkan...");
+                await BleClient.requestEnable();
             }
-            return null;
-        }
 
-        async function runBluetooth() {
-            const BleClient = getBleClient();
-            if (!BleClient) {
-                log("ERROR: Plugin Bluetooth tidak terdeteksi!");
+            log("Mencari perangkat...");
+            const device = await BleClient.requestDevice({ acceptAllDevices: true });
+            
+            if (device && device.deviceId) {
+                // SIMPAN KE WINDOW VARIABLE
+                window.selectedDeviceId = device.deviceId; 
+                log("TERHUBUNG KE: " + (device.name || "Printer"));
+                log("ID DISIMPAN: " + window.selectedDeviceId);
+                
+                document.getElementById('btnPrint').disabled = false;
+                alert("Printer Terhubung!");
+            }
+        } catch (err) {
+            log("ERROR: " + err.message);
+        }
+    }
+
+    async function printStruk() {
+        const BleClient = getBleClient();
+        // AMBIL DARI WINDOW VARIABLE
+        const currentId = window.selectedDeviceId;
+
+        try {
+            if (!currentId) {
+                log("GAGAL: deviceId tidak ditemukan di memori.");
                 return;
             }
 
-            try {
-                log("Inisialisasi...");
-                await BleClient.initialize();
+            log("Menghubungkan ke: " + currentId);
+            await BleClient.connect({ deviceId: currentId }); // Gunakan objek { deviceId }
+            log("Handshake Berhasil!");
 
-                const isEnabled = await BleClient.isEnabled();
-                if (!isEnabled) {
-                    log("Bluetooth mati. Mengaktifkan...");
-                    await BleClient.requestEnable();
-                }
+            const services = await BleClient.getServices({ deviceId: currentId });
+            let targetService, targetChar;
 
-                log("Mencari perangkat...");
-                const device = await BleClient.requestDevice({ acceptAllDevices: true });
-                
-                if (device) {
-                    deviceId = device.deviceId;
-                    log("TERHUBUNG KE: " + (device.name || "Printer"));
-                    document.getElementById('btnPrint').disabled = false;
-                    alert("Printer Terhubung!");
-                }
-            } catch (err) {
-                log("ERROR: " + err.message);
-            }
-        }
-
-        async function printStruk() {
-            const BleClient = getBleClient();
-            try {
-                if (!deviceId) {
-                    log("Error: ID Perangkat tidak ditemukan.");
-                    return;
-                }
-
-                log("Menghubungkan...");
-                await BleClient.connect(deviceId);
-                log("Tersambung!");
-
-                const services = await BleClient.getServices(deviceId);
-                let targetService, targetChar;
-
-                for (const s of services) {
-                    for (const c of s.characteristics) {
-                        // Cek characteristic yang mendukung Write (Pintu masuk data ke printer)
-                        if (c.properties.writeWithoutResponse || c.properties.write) {
-                            targetService = s.uuid;
-                            targetChar = c.uuid;
-                            break;
-                        }
+            for (const s of services) {
+                for (const c of s.characteristics) {
+                    if (c.properties.writeWithoutResponse || c.properties.write) {
+                        targetService = s.uuid;
+                        targetChar = c.uuid;
+                        break;
                     }
-                    if (targetService) break;
                 }
-
-                if (!targetService || !targetChar) {
-                    throw new Error("Printer tidak mendukung jalur data.");
-                }
-
-                log("Jalur ditemukan!");
-
-                // Persiapan perintah ESC/POS
-                const encoder = new TextEncoder();
-                const esc = "\x1B";
-                
-                let text = esc + "@"; // Reset printer
-                text += esc + "a" + "\x01"; // Align center
-                text += esc + "E" + "\x01" + "MARKAS BEKAM\n" + esc + "E" + "\x00"; // Bold
-                text += "--------------------------------\n";
-                text += "Tes Print: BERHASIL\n";
-                text += "Sistem   : Android v14\n";
-                text += "--------------------------------\n";
-                text += "\n\n\n\n";
-
-                const encodedData = encoder.encode(text);
-                const dataView = new DataView(encodedData.buffer);
-
-                log("Mengirim data...");
-                await BleClient.writeWithoutResponse(
-                    deviceId,
-                    targetService,
-                    targetChar,
-                    dataView
-                );
-
-                log("Cetak selesai!");
-
-                setTimeout(async () => {
-                    await BleClient.disconnect(deviceId);
-                    log("Koneksi diputus aman.");
-                }, 1500);
-
-            } catch (err) {
-                log("GAGAL: " + err.message);
-                try { await BleClient.disconnect(deviceId); } catch(e) {}
+                if (targetService) break;
             }
+
+            if (!targetService || !targetChar) throw new Error("Jalur data tidak ditemukan.");
+
+            log("Mengirim data ESC/POS...");
+
+            const encoder = new TextEncoder();
+            const esc = "\x1B";
+            let text = esc + "@" + esc + "a" + "\x01"; 
+            text += esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00";
+            text += "--------------------------------\n";
+            text += "Tes Cetak: BERHASIL\n";
+            text += "--------------------------------\n\n\n\n";
+
+            const dataView = new DataView(encoder.encode(text).buffer);
+
+            await BleClient.writeWithoutResponse({
+                deviceId: currentId,
+                service: targetService,
+                characteristic: targetChar,
+                value: dataView
+            });
+
+            log("CETAK SELESAI!");
+
+            setTimeout(async () => {
+                await BleClient.disconnect({ deviceId: currentId });
+                log("Koneksi ditutup.");
+            }, 1500);
+
+        } catch (err) {
+            log("GAGAL: " + err.message);
+            if (currentId) await BleClient.disconnect({ deviceId: currentId }).catch(() => {});
         }
-    </script>
+    }
+</script>
 </body>
 </html>
