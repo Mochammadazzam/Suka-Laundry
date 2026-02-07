@@ -17,16 +17,12 @@
 <body>
     <div class="card">
         <h2>EPPOS Printer Tester</h2>
-        
         <button class="btn-blue" onclick="runBluetooth()">1. AKTIFKAN & SCAN PRINTER</button>
-        
         <button id="btnPrint" class="btn-green" onclick="printStruk()" disabled>2. CETAK STRUK TES</button>
-        
         <div id="status">Status: Menunggu Klik...</div>
     </div>
 
     <script>
-        const BleClient = window.Capacitor.Plugins.BluetoothLe;
         let deviceId = null;
 
         function log(msg) {
@@ -35,10 +31,24 @@
             status.scrollTop = status.scrollHeight;
         }
 
+        // Fungsi pembantu untuk ambil Plugin secara aman
+        function getBleClient() {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
+                return window.Capacitor.Plugins.BluetoothLe;
+            }
+            return null;
+        }
+
         async function runBluetooth() {
+            const BleClient = getBleClient();
+            if (!BleClient) {
+                log("ERROR: Plugin Bluetooth tidak terdeteksi!");
+                return;
+            }
+
             try {
-                await BleClient.initialize();
                 log("Inisialisasi...");
+                await BleClient.initialize();
 
                 const isEnabled = await BleClient.isEnabled();
                 if (!isEnabled) {
@@ -61,82 +71,74 @@
         }
 
         async function printStruk() {
-    try {
-        if (!deviceId) {
-            log("Error: ID Perangkat tidak ditemukan.");
-            return;
-        }
-
-        log("Menghubungkan...");
-        await BleClient.connect(deviceId);
-        log("Tersambung!");
-
-        // 1. Ambil list services & characteristics
-        const services = await BleClient.getServices(deviceId);
-        let targetService, targetChar;
-
-        // Mencari characteristic yang mendukung penulisan data
-        for (const s of services) {
-            for (const c of s.characteristics) {
-                if (c.properties.writeWithoutResponse || c.properties.write) {
-                    targetService = s.uuid;
-                    targetChar = c.uuid;
-                    break;
+            const BleClient = getBleClient();
+            try {
+                if (!deviceId) {
+                    log("Error: ID Perangkat tidak ditemukan.");
+                    return;
                 }
+
+                log("Menghubungkan...");
+                await BleClient.connect(deviceId);
+                log("Tersambung!");
+
+                const services = await BleClient.getServices(deviceId);
+                let targetService, targetChar;
+
+                for (const s of services) {
+                    for (const c of s.characteristics) {
+                        // Cek characteristic yang mendukung Write (Pintu masuk data ke printer)
+                        if (c.properties.writeWithoutResponse || c.properties.write) {
+                            targetService = s.uuid;
+                            targetChar = c.uuid;
+                            break;
+                        }
+                    }
+                    if (targetService) break;
+                }
+
+                if (!targetService || !targetChar) {
+                    throw new Error("Printer tidak mendukung jalur data.");
+                }
+
+                log("Jalur ditemukan!");
+
+                // Persiapan perintah ESC/POS
+                const encoder = new TextEncoder();
+                const esc = "\x1B";
+                
+                let text = esc + "@"; // Reset printer
+                text += esc + "a" + "\x01"; // Align center
+                text += esc + "E" + "\x01" + "MARKAS BEKAM\n" + esc + "E" + "\x00"; // Bold
+                text += "--------------------------------\n";
+                text += "Tes Print: BERHASIL\n";
+                text += "Sistem   : Android v14\n";
+                text += "--------------------------------\n";
+                text += "\n\n\n\n";
+
+                const encodedData = encoder.encode(text);
+                const dataView = new DataView(encodedData.buffer);
+
+                log("Mengirim data...");
+                await BleClient.writeWithoutResponse(
+                    deviceId,
+                    targetService,
+                    targetChar,
+                    dataView
+                );
+
+                log("Cetak selesai!");
+
+                setTimeout(async () => {
+                    await BleClient.disconnect(deviceId);
+                    log("Koneksi diputus aman.");
+                }, 1500);
+
+            } catch (err) {
+                log("GAGAL: " + err.message);
+                try { await BleClient.disconnect(deviceId); } catch(e) {}
             }
-            if (targetService) break;
         }
-
-        if (!targetService || !targetChar) {
-            throw new Error("Printer tidak mendukung jalur data.");
-        }
-
-        log("Jalur ditemukan!");
-
-        // 2. Siapkan perintah ESC/POS
-        const encoder = new TextEncoder();
-        const esc = "\x1B";
-        
-        let text = esc + "@"; // Initialize printer
-        text += esc + "a" + "\x01"; // Align center
-        text += esc + "E" + "\x01" + "MARKAS BEKAM\n" + esc + "E" + "\x00"; // Bold
-        text += "--------------------------------\n";
-        text += "Tes Print: BERHASIL\n";
-        text += "Sistem   : Android v14\n";
-        text += "--------------------------------\n";
-        text += "\n\n\n\n"; // Feed kertas
-
-        // 3. KONVERSI WAJIB KE DATAVIEW
-        // Capacitor 6 butuh DataView, bukan Uint8Array langsung.
-        const encodedData = encoder.encode(text);
-        const dataView = new DataView(encodedData.buffer);
-
-        log("Mengirim data ke printer...");
-
-        // 4. Kirim Data
-        await BleClient.writeWithoutResponse(
-            deviceId,
-            targetService,
-            targetChar,
-            dataView
-        );
-
-        log("Cetak selesai!");
-
-        // 5. Berikan jeda sebentar sebelum disconnect agar buffer printer tidak kaget
-        setTimeout(async () => {
-            await BleClient.disconnect(deviceId);
-            log("Koneksi diputus aman.");
-        }, 1500);
-
-    } catch (err) {
-        log("GAGAL: " + err.message);
-        console.error("Detail:", err);
-        // Pastikan disconnect kalau gagal supaya tidak nyangkut
-        try { await BleClient.disconnect(deviceId); } catch(e) {}
-    }
-}
-
     </script>
 </body>
 </html>
