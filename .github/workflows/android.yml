@@ -33,14 +33,19 @@ jobs:
       - name: Inject Bluetooth & Location Permissions
         run: |
           # Inject izin ke AndroidManifest.xml setelah folder android dibuat
+          # Menambahkan BLUETOOTH_ADVERTISE dan flag neverForLocation untuk stabilitas Android 12+
           sed -i '/<application/i \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
-          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" /> \
           <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
           <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
+          
+          # Mengaktifkan Cleartext Traffic agar WebView bisa berkomunikasi lancar dengan plugin
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
