@@ -19,6 +19,8 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install
+          # Pastikan plugin bluetooth community terinstall dengan benar
+          npm install @capacitor-community/bluetooth-le
           npm install -g @capacitor/cli
 
       - name: Prepare Web Assets
@@ -31,17 +33,25 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Inject Bluetooth Permissions (Android 12-14 Fix)
+      - name: Inject Bluetooth & Hardware Config (Anti Force Close)
         run: |
-          # Menyisipkan izin tepat setelah tag <manifest> tanpa merusak struktur file asli
+          # 1. Menambahkan Izin Bluetooth & Lokasi (Android 12+)
           SED_PERMS='/<manifest/a \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
-          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
+          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
           
           sed -i "$SED_PERMS" android/app/src/main/AndroidManifest.xml
+
+          # 2. Menambahkan Deklarasi Hardware (Kunci agar tidak Force Close)
+          # Ini memberitahu Android bahwa aplikasi ini memang butuh hardware Bluetooth LE
+          SED_FEATURE='/<\/application>/a \
+          <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />'
+          
+          sed -i "$SED_FEATURE" android/app/src/main/AndroidManifest.xml
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
