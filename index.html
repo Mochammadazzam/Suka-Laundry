@@ -7,55 +7,94 @@
     <style>
         body { font-family: sans-serif; padding: 20px; text-align: center; background: #f0f2f5; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
         .btn-blue { background: #007bff; color: white; }
-        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 120px; white-space: pre-wrap; }
+        .btn-green { background: #28a745; color: white; }
+        .btn-green:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 120px; white-space: pre-wrap; overflow-y: auto; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>EPPOS Tester v6</h2>
-        <button class="btn-blue" onclick="runBluetooth()">START PROCESS</button>
+        <h2>EPPOS Printer Tester</h2>
+        
+        <button class="btn-blue" onclick="runBluetooth()">1. AKTIFKAN & SCAN PRINTER</button>
+        
+        <button id="btnPrint" class="btn-green" onclick="printStruk()" disabled>2. CETAK STRUK TES</button>
+        
         <div id="status">Status: Menunggu Klik...</div>
     </div>
 
     <script>
-        // JANGAN PAKAI UNPKG. Capacitor akan inject otomatis.
-        // Kita gunakan event listener untuk memastikan Capacitor siap.
-        document.addEventListener('deviceready', () => {
-            console.log("Capacitor Native Ready");
-        }, false);
+        const BleClient = window.Capacitor.Plugins.BluetoothLe;
+        let deviceId = null;
+
+        function log(msg) {
+            const status = document.getElementById('status');
+            status.innerText += "\n> " + msg;
+            status.scrollTop = status.scrollHeight;
+        }
 
         async function runBluetooth() {
-            const status = document.getElementById('status');
-            const log = (m) => status.innerText += "\n> " + m;
-
-            // Akses plugin melalui window.Capacitor.Plugins
-            const BleClient = window.Capacitor.Plugins.BluetoothLe;
-
             try {
-                if (!BleClient) {
-                    throw new Error("Plugin Bluetooth tidak terdeteksi! Pastikan APK di-build dengan benar.");
-                }
-
                 await BleClient.initialize();
-                log("Inisialisasi OK.");
+                log("Inisialisasi...");
 
                 const isEnabled = await BleClient.isEnabled();
                 if (!isEnabled) {
-                    log("Bluetooth mati. Meminta akses...");
+                    log("Bluetooth mati. Mengaktifkan...");
                     await BleClient.requestEnable();
                 }
 
-                log("Scanning perangkat...");
+                log("Mencari perangkat...");
                 const device = await BleClient.requestDevice({ acceptAllDevices: true });
                 
                 if (device) {
-                    log("TERHUBUNG: " + device.name);
-                    alert("Printer ditemukan: " + device.name);
+                    deviceId = device.deviceId;
+                    log("TERHUBUNG KE: " + (device.name || "Printer"));
+                    document.getElementById('btnPrint').disabled = false;
+                    alert("Printer Terhubung!");
                 }
             } catch (err) {
                 log("ERROR: " + err.message);
+            }
+        }
+
+        async function printStruk() {
+            try {
+                log("Menghubungkan ke Service Printer...");
+                
+                // Service ID standar untuk printer thermal Bluetooth (UUID)
+                const SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
+                const CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
+
+                await BleClient.connect(deviceId);
+                log("Koneksi stabil. Mengirim data...");
+
+                // Perintah ESC/POS (Hex)
+                const encoder = new TextEncoder();
+                const center = "\x1B\x61\x01"; // Rata Tengah
+                const boldOn = "\x1B\x45\x01"; // Tebal Aktif
+                const boldOff = "\x1B\x45\x00"; // Tebal Mati
+                const feed = "\n\n\n\n"; // Spasi akhir agar kertas keluar
+
+                let struk = center + boldOn + "MARKAS BEKAM\n" + boldOff;
+                struk += "--------------------------------\n";
+                struk += "Produk: Tes Cetak EPPOS\n";
+                struk += "Status: Bluetooth v6 OK\n";
+                struk += "--------------------------------\n";
+                struk += "Terima Kasih!\n" + feed;
+
+                const data = encoder.encode(struk);
+                
+                // Kirim data ke printer
+                await BleClient.write(deviceId, SERVICE_UUID, CHARACTERISTIC_UUID, data);
+                
+                log("Data dikirim! Cek Printer.");
+                await BleClient.disconnect(deviceId);
+
+            } catch (err) {
+                log("GAGAL CETAK: " + err.message);
                 console.error(err);
             }
         }
