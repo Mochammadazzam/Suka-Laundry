@@ -71,67 +71,83 @@
     }
 
     async function printStruk() {
-        const BleClient = getBleClient();
-        // AMBIL DARI WINDOW VARIABLE
-        const currentId = window.selectedDeviceId;
+    const BleClient = getBleClient();
+    const currentId = window.selectedDeviceId;
 
-        try {
-            if (!currentId) {
-                log("GAGAL: deviceId tidak ditemukan di memori.");
-                return;
-            }
+    try {
+        if (!currentId) {
+            log("GAGAL: Scan printer dulu.");
+            return;
+        }
 
-            log("Menghubungkan ke: " + currentId);
-            await BleClient.connect({ deviceId: currentId }); // Gunakan objek { deviceId }
-            log("Handshake Berhasil!");
+        log("Menghubungkan ke: " + currentId);
+        await BleClient.connect({ deviceId: currentId });
+        log("Handshake Berhasil!");
 
-            const services = await BleClient.getServices({ deviceId: currentId });
-            let targetService, targetChar;
+        // --- SOLUSI ERROR 'NOT ITERABLE' ---
+        log("Mencari jalur data...");
+        const result = await BleClient.getServices({ deviceId: currentId });
+        
+        // Memastikan kita mengambil array services dengan benar
+        const services = Array.isArray(result) ? result : (result.services || []);
+        
+        let targetService = "000018f0-0000-1000-8000-00805f9b34fb"; // UUID Standar EPPOS
+        let targetChar = "00002af1-0000-1000-8000-00805f9b34fb";    // UUID Standar EPPOS
+        let found = false;
 
+        // Jika UUID standar tidak cocok, kita cari otomatis dari services yang ada
+        if (services.length > 0) {
             for (const s of services) {
                 for (const c of s.characteristics) {
                     if (c.properties.writeWithoutResponse || c.properties.write) {
                         targetService = s.uuid;
                         targetChar = c.uuid;
+                        found = true;
                         break;
                     }
                 }
-                if (targetService) break;
+                if (found) break;
             }
-
-            if (!targetService || !targetChar) throw new Error("Jalur data tidak ditemukan.");
-
-            log("Mengirim data ESC/POS...");
-
-            const encoder = new TextEncoder();
-            const esc = "\x1B";
-            let text = esc + "@" + esc + "a" + "\x01"; 
-            text += esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00";
-            text += "--------------------------------\n";
-            text += "Tes Cetak: BERHASIL\n";
-            text += "--------------------------------\n\n\n\n";
-
-            const dataView = new DataView(encoder.encode(text).buffer);
-
-            await BleClient.writeWithoutResponse({
-                deviceId: currentId,
-                service: targetService,
-                characteristic: targetChar,
-                value: dataView
-            });
-
-            log("CETAK SELESAI!");
-
-            setTimeout(async () => {
-                await BleClient.disconnect({ deviceId: currentId });
-                log("Koneksi ditutup.");
-            }, 1500);
-
-        } catch (err) {
-            log("GAGAL: " + err.message);
-            if (currentId) await BleClient.disconnect({ deviceId: currentId }).catch(() => {});
         }
+
+        log("Mengirim teks ke printer...");
+
+        // Perintah ESC/POS
+        const encoder = new TextEncoder();
+        const esc = "\x1B";
+        let text = esc + "@"; // Reset
+        text += esc + "a" + "\x01"; // Center
+        text += esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00"; // Bold
+        text += "--------------------------------\n";
+        text += "Tes Cetak : BERHASIL!\n";
+        text += "Tanggal   : " + new Date().toLocaleString() + "\n";
+        text += "--------------------------------\n";
+        text += "\n\n\n\n"; // Feed kertas
+
+        const dataView = new DataView(encoder.encode(text).buffer);
+
+await BleClient.writeWithoutResponse({
+    deviceId: currentId,
+    service: targetService,
+    characteristic: targetChar,
+    value: dataView // Pastikan variabel ini adalah DataView
+});
+
+
+        log("CETAK SELESAI!");
+
+        // Beri waktu printer memproses sebelum disconnect
+        setTimeout(async () => {
+            await BleClient.disconnect({ deviceId: currentId });
+            log("Koneksi ditutup.");
+        }, 2000);
+
+    } catch (err) {
+        log("GAGAL: " + err.message);
+        console.error(err);
     }
+}
+
 </script>
 </body>
 </html>
