@@ -1,8 +1,9 @@
 {
-  "name": "eppos-bt-webview",
+  "name": "eppos-bt-tester",
   "version": "1.0.0",
   "scripts": {
-    "cap-sync": "npx cap sync android"
+    "build-web": "mkdir -p www && cp index.html www/index.html",
+    "sync": "npx cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
