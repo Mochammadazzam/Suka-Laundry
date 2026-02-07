@@ -1,4 +1,5 @@
 name: Build Android Pro
+
 on:
   push:
     branches: [ main ]
@@ -15,7 +16,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Tools
+      - name: Install Dependencies
         run: |
           npm install
           npm install -g @capacitor/cli
@@ -25,45 +26,22 @@ jobs:
           mkdir -p www
           cp index.html www/
 
-      - name: Initialize Capacitor
+      - name: Initialize Capacitor Android
         run: |
           npx cap add android
           npx cap sync android
 
-      - name: Unlock Bluetooth Bridge (Android 12-14 Fix)
+      - name: Inject Bluetooth Permissions (Android 12-14 Fix)
         run: |
-          # Ini bagian paling krusial agar navigator.bluetooth di HTML-mu aktif
-          cat <<EOF > android/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="Suka Laundry Pro"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:name="com.sukalaundry.pro.MainActivity"
-                      android:exported="true"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-                      android:launchMode="singleTop">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # Menyisipkan izin tepat setelah tag <manifest> tanpa merusak struktur file asli
+          SED_PERMS='/<manifest/a \
+          <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
+          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+          
+          sed -i "$SED_PERMS" android/app/src/main/AndroidManifest.xml
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -71,14 +49,14 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Final Build APK
+      - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-V3
+          name: Suka-Laundry-Pro-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
