@@ -14,7 +14,7 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Install Dependencies
+      - name: Install NPM Dependencies
         run: npm install
 
       - name: Prepare Web Build
@@ -22,15 +22,15 @@ jobs:
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Capacitor Sync
+      - name: Create Android Project & Sync
         run: |
-          npx cap add android || echo "Exist"
+          npx cap add android || echo "Android folder already exists"
           npx cap sync android
 
-      - name: Inject Anti-Gagal Permissions
+      - name: Inject Bluetooth & Anti-Crash Permissions
         run: |
-          # [span_10](start_span)Inject izin tepat setelah tag <manifest>[span_10](end_span)
-          sed -i '/<manifest/a \
+          # 1. Inject Izin Bluetooth Lengkap (Termasuk ADVERTISE untuk Android 12+)
+          sed -i '/<application/i \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
@@ -40,15 +40,18 @@ jobs:
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
           <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
           
-          # [span_11](start_span)Aktifkan trafik data untuk WebView[span_11](end_span)
+          # 2. Inject CleartextTraffic agar WebView tidak blokir data biner (Penting!)
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Build APK
-        run: |
-          chmod +x android/gradlew
-          cd android && ./gradlew assembleDebug
+      - name: Grant Execute Permission
+        run: chmod +x android/gradlew
 
-      - name: Upload APK
+      - name: Build APK Debug
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SukaLaundry-Printer-Pro
