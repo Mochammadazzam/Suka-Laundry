@@ -1,8 +1,13 @@
 {
-  "appId": "com.eppos.tester",
-  "appName": "EPPOS Tester",
+  "appId": "com.sukalaundry.pro",
+  "appName": "Suka Laundry",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "BluetoothLe": {
+      "displayAllDevices": true
+    }
   }
 }
