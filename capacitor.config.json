@@ -5,11 +5,9 @@
   "server": {
     "androidScheme": "https"
   },
-  "android": {
-    "buildOptions": {
-      "releaseType": "APK",
-      "minifyEnabled": true,
-      "shrinkResources": true
+  "plugins": {
+    "BluetoothLe": {
+      "displayAllDevices": true
     }
   }
 }
