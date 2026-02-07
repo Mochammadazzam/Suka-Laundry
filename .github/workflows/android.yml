@@ -5,32 +5,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Install NPM Dependencies
+      - name: Install Dependencies
         run: npm install
 
-      - name: Prepare Web Build
+      - name: Prepare WWW
         run: |
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Create Android Project & Sync
+      - name: Capacitor Sync
         run: |
-          npx cap add android || echo "Android folder already exists"
+          npx cap add android || echo "Exist"
           npx cap sync android
 
-      - name: Inject Bluetooth & Anti-Crash Permissions
+      - name: Inject Permissions (Safety Mode)
         run: |
-          # 1. Inject Izin Bluetooth Lengkap (Termasuk ADVERTISE untuk Android 12+)
-          sed -i '/<application/i \
+          # Inject izin tepat setelah tag <manifest>
+          sed -i '/<manifest/a \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
@@ -40,19 +40,16 @@ jobs:
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
           <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
           
-          # 2. Inject CleartextTraffic agar WebView tidak blokir data biner (Penting!)
+          # Inject CleartextTraffic
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Grant Execute Permission
-        run: chmod +x android/gradlew
-
-      - name: Build APK Debug
+      - name: Build APK
         run: |
-          cd android
-          ./gradlew assembleDebug
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SukaLaundry-Printer-Pro
+          name: SukaLaundry-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
