@@ -5,42 +5,54 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
+          cache: 'gradle'
 
-      - name: Install & Web Build
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Prepare Web Build (Root to WWW)
         run: |
-          npm install
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Native Sync (Menanam Plugin ke Java)
+      - name: Initial Capacitor Android
         run: |
-          npx cap add android
+          npx cap add android || echo "Android platform already exists"
           npx cap sync android
 
       - name: Inject Bluetooth & Location Permissions
         run: |
-          # Inject izin ke AndroidManifest.xml
+          # Menambahkan semua izin yang dibutuhkan untuk Bluetooth & Thermal Printer
+          # Baris ini menyisipkan izin TEPAT sebelum tag <application> di AndroidManifest
           sed -i '/<application/i \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
-          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
           <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
-          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
+          <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x android/gradlew
 
       - name: Build APK Debug
         run: |
-          cd android && ./gradlew assembleDebug
+          cd android
+          ./gradlew clean
+          ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EPPOS-Final-Build
+          name: EPPOS-Printer-Tester
           path: android/app/build/outputs/apk/debug/app-debug.apk
