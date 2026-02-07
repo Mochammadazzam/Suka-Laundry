@@ -561,65 +561,74 @@
 
 
         // 2. FUNGSI CETAK STRUK (printThermalInvoice)
-        async function printThermalInvoice() {
-            if (!app.currentTx || (!app.printCharacteristic && !app.printDevice)) {
+                async function printThermalInvoice() {
+            if (!app.currentTx || !app.printDevice) {
                 return showMessage("Printer Belum Terhubung!");
             }
 
-            try {
-                const t = app.currentTx;
-                const enc = new TextEncoder();
-                const brand = (app.settings.name || 'Suka Laundry').toUpperCase();
-                const addr = app.settings.address || '';
-                const phone = app.settings.phone || '';
+            const BleClient = window.Capacitor.Plugins.BluetoothLe;
+            const currentId = app.printDevice.deviceId;
 
-                let txt = '\x1B\x40\x1B\x61\x01' + brand + "\n";
-                if (addr) txt += addr + "\n";
-                if (phone) txt += "WA: " + phone + "\n";
-                txt += "--------------------------------\n\x1B\x61\x00";
-                txt += "Nota : " + t.invoice + "\n";
-                txt += "Plg  : " + t.member.name.toUpperCase() + "\n";
-                txt += "--------------------------------\n";
+            try {
+                showMessage("Menghubungkan...");
+                
+                // 1. Koneksi dengan timeout singkat
+                await BleClient.connect({ deviceId: currentId });
+                await new Promise(r => setTimeout(r, 500)); // Jeda agar tidak crash
+
+                // 2. Langsung tembak UUID standar (Jangan pakai Discovery/getServices yang bikin berat)
+                const targetService = "000018f0-0000-1000-8000-00805f9b34fb"; 
+                const targetChar = "00002af1-0000-1000-8000-00805f9b34fb";    
+
+                // 3. Susun Teks
+                const t = app.currentTx;
+                const encoder = new TextEncoder();
+                const esc = "\x1B";
+                let text = esc + "@" + esc + "a" + "\x01"; // Reset & Center
+                text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
+                text += (app.settings.address || '') + "\n";
+                text += "--------------------------------\n";
+                text += esc + "a" + "\x00"; // Left
+                text += "Nota : " + t.invoice + "\n";
+                text += "Plg  : " + t.member.name.toUpperCase() + "\n";
+                text += "--------------------------------\n";
                 
                 t.items.forEach(i => {
-                    let qtyStr = i.qty + " " + i.unit;
-                    let priceStr = "Rp" + i.subtotal.toLocaleString('id-ID');
-                    let spaces = 32 - qtyStr.length - priceStr.length;
-                    txt += i.serviceName.toUpperCase().substring(0, 32) + "\n";
-                    txt += qtyStr + " ".repeat(spaces > 0 ? spaces : 1) + priceStr + "\n";
+                    text += i.serviceName.toUpperCase() + "\n";
+                    text += i.qty + " " + i.unit + " Rp" + i.subtotal.toLocaleString('id-ID') + "\n";
                 });
                 
-                txt += "--------------------------------\n";
-                txt += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
-                txt += "Status: " + t.status + "\n";
-                txt += "\x1B\x61\x01\nTerima Kasih\n\n\n\n\n";
+                text += "--------------------------------\n";
+                text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
+                text += "Status: " + t.status + "\n\n\n\n\n";
 
-                const data = enc.encode(txt);
+                const uint8array = encoder.encode(text);
+                
+                // 4. Kirim Data dengan format Base64 (Lebih enteng buat beberapa driver Android)
+                const base64Data = btoa(String.fromCharCode(...uint8array));
+                
+                showMessage("Mengirim data...");
+                await BleClient.write({
+                    deviceId: currentId,
+                    service: targetService,
+                    characteristic: targetChar,
+                    value: base64Data
+                });
 
-                if (app.isNativeBT && BluetoothLe) {
-                    const base64Data = btoa(String.fromCharCode(...data));
-                    await BluetoothLe.write({
-                        deviceId: app.printDevice.deviceId,
-                        service: SERVICE_UUID,
-                        characteristic: CHARACTERISTIC_UUID,
-                        value: base64Data
-                    });
-                    showMessage("Mencetak Struk (APK)...");
-                } 
-                else if (app.printCharacteristic) {
-                    const CHUNK_SIZE = 20;
-                    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-                        let chunk = data.slice(i, i + CHUNK_SIZE);
-                        await app.printCharacteristic.writeValue(chunk);
-                        await new Promise(r => setTimeout(r, 25));
-                    }
-                    showMessage("Mencetak (Web)...");
-                }
+                showMessage("Cetak Selesai!");
+
+                // 5. Jeda sebelum disconnect (Penting agar tidak Force Close saat menutup jalur)
+                await new Promise(r => setTimeout(r, 1000));
+                await BleClient.disconnect({ deviceId: currentId });
+
             } catch (e) { 
                 console.error(e);
-                showMessage("Printer Error!"); 
+                showMessage("Gagal: Printer sibuk/RTO"); 
+                // Jika error, coba paksa putus koneksi biar tidak ngunci
+                try { await BleClient.disconnect({ deviceId: currentId }); } catch(err) {}
             }
         }
+
 
         // REALTIME SYNC
         function initSync() {
