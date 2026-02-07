@@ -13,35 +13,34 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Prepare Web Directory (Fix Structure)
+      - name: Install & Web Build
         run: |
+          npm install
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Setup Capacitor Android
+      - name: Native Sync (Menanam Plugin ke Java)
         run: |
           npx cap add android
           npx cap sync android
-      - name: Inject Permissions (Android 14 Ready)
+
+      - name: Inject Bluetooth & Location Permissions
         run: |
+          # Inject izin ke AndroidManifest.xml
           sed -i '/<application/i \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
-          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
           <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
-          <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />' android/app/src/main/AndroidManifest.xml
-
+          <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build APK Debug
         run: |
           cd android && ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: EPPOS-Tester-APK
+          name: EPPOS-Final-Build
           path: android/app/build/outputs/apk/debug/app-debug.apk
