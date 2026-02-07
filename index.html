@@ -61,43 +61,67 @@
         }
 
         async function printStruk() {
-            try {
-                log("Menghubungkan ke Service Printer...");
-                
-                // Service ID standar untuk printer thermal Bluetooth (UUID)
-                const SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
-                const CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
+    try {
+        log("Memulai proses cetak...");
+        
+        // 1. Konek ke perangkat
+        await BleClient.connect(deviceId);
+        log("Handshake berhasil...");
 
-                await BleClient.connect(deviceId);
-                log("Koneksi stabil. Mengirim data...");
+        // 2. Cari Service & Characteristic secara otomatis
+        // Kita tidak menebak UUID, tapi mencari mana yang bisa menerima data (Properties: Write)
+        const services = await BleClient.getServices(deviceId);
+        let targetService, targetChar;
 
-                // Perintah ESC/POS (Hex)
-                const encoder = new TextEncoder();
-                const center = "\x1B\x61\x01"; // Rata Tengah
-                const boldOn = "\x1B\x45\x01"; // Tebal Aktif
-                const boldOff = "\x1B\x45\x00"; // Tebal Mati
-                const feed = "\n\n\n\n"; // Spasi akhir agar kertas keluar
-
-                let struk = center + boldOn + "MARKAS BEKAM\n" + boldOff;
-                struk += "--------------------------------\n";
-                struk += "Produk: Tes Cetak EPPOS\n";
-                struk += "Status: Bluetooth v6 OK\n";
-                struk += "--------------------------------\n";
-                struk += "Terima Kasih!\n" + feed;
-
-                const data = encoder.encode(struk);
-                
-                // Kirim data ke printer
-                await BleClient.write(deviceId, SERVICE_UUID, CHARACTERISTIC_UUID, data);
-                
-                log("Data dikirim! Cek Printer.");
-                await BleClient.disconnect(deviceId);
-
-            } catch (err) {
-                log("GAGAL CETAK: " + err.message);
-                console.error(err);
+        for (const service of services) {
+            for (const char of service.characteristics) {
+                if (char.properties.write || char.properties.writeWithoutResponse) {
+                    targetService = service.uuid;
+                    targetChar = char.uuid;
+                    break;
+                }
             }
+            if (targetService) break;
         }
+
+        if (!targetService || !targetChar) {
+            throw new Error("Printer tidak mendukung protokol tulis data.");
+        }
+
+        log("Menemukan jalur: " + targetChar);
+
+        // 3. Siapkan Data ESC/POS
+        const encoder = new TextEncoder();
+        const esc = "\x1B";
+        const init = esc + "@"; // Reset printer
+        const center = esc + "a" + "\x01";
+        const bold = esc + "E" + "\x01";
+        const reset = esc + "E" + "\x00" + esc + "a" + "\x00";
+        
+        let text = init + center + bold + "MARKAS BEKAM\n" + reset;
+        text += "--------------------------------\n";
+        text += "Tes Print: BERHASIL\n";
+        text += "Sistem   : Capacitor 6\n";
+        text += "--------------------------------\n";
+        text += "\n\n\n\n"; // Feed kertas
+
+        const data = encoder.encode(text);
+
+        // 4. Kirim Data
+        log("Mengirim data ke head printer...");
+        await BleClient.writeWithoutResponse(deviceId, targetService, targetChar, data);
+        
+        log("SELESAI! Kertas seharusnya keluar.");
+        
+        // Putuskan koneksi setelah selesai agar printer bisa dipakai device lain
+        await BleClient.disconnect(deviceId);
+
+    } catch (err) {
+        log("GAGAL: " + err.message);
+        console.error("Detail Error:", err);
+    }
+}
+
     </script>
 </body>
 </html>
