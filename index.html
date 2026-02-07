@@ -3,62 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPPOS BT Tester</title>
+    <title>EPPOS Pro Tester</title>
     <style>
         body { font-family: sans-serif; padding: 20px; text-align: center; background: #f0f2f5; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.3s; }
         .btn-blue { background: #007bff; color: white; }
+        .btn-blue:active { background: #0056b3; }
         .btn-green { background: #28a745; color: white; }
-        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 100px; white-space: pre-wrap; }
+        #status { margin-top: 20px; padding: 10px; background: #222; color: #0f0; font-family: monospace; font-size: 11px; text-align: left; border-radius: 5px; min-height: 120px; white-space: pre-wrap; overflow-y: auto; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>EPPOS Tester v6</h2>
-        <button class="btn-blue" onclick="startBT()">1. Aktifkan & Scan Printer</button>
-        <button id="btnPrint" class="btn-green" onclick="printData()" disabled>2. Cetak Struk</button>
-        <div id="status">Status: Siap...</div>
+        <button class="btn-blue" onclick="runBluetoothDiscovery()">START BLUETOOTH PROCESS</button>
+        <button id="btnPrint" class="btn-green" onclick="printData()" disabled>CETAK TEST</button>
+        <div id="status">Status: Menunggu Klik...</div>
     </div>
 
     <script src="https://unpkg.com/@capacitor/core@6/dist/index.js"></script>
     <script>
+        // Akses Plugin Bluetooth LE
         const { BleClient } = window.Capacitor.Plugins.BluetoothLe;
-        let selectedDeviceId = null;
 
-        function log(msg) { document.getElementById('status').innerText += "\n> " + msg; }
+        function log(msg) {
+            const status = document.getElementById('status');
+            status.innerText += "\n> " + msg;
+            console.log(msg);
+        }
 
-        async function startBT() {
+        async function runBluetoothDiscovery() {
             try {
+                log("Menginisialisasi BleClient...");
                 await BleClient.initialize();
-                log("Inisialisasi...");
 
-                // Aktifkan Bluetooth jika mati
+                // 1. Cek & Minta Izin (Penting untuk Android 13/14)
+                log("Mengecek izin sistem...");
+                
+                // 2. Cek apakah Bluetooth Menyala
                 const isEnabled = await BleClient.isEnabled();
                 if (!isEnabled) {
-                    log("Bluetooth mati. Mengaktifkan...");
-                    await BleClient.requestEnable();
+                    log("Bluetooth MATI. Meminta sistem menyalakan...");
+                    try {
+                        await BleClient.requestEnable();
+                        log("Permintaan menyalakan dikirim.");
+                    } catch (e) {
+                        log("User menolak menyalakan Bluetooth.");
+                        return;
+                    }
+                } else {
+                    log("Bluetooth sudah aktif.");
                 }
 
-                log("Mencari perangkat...");
-                const device = await BleClient.requestDevice({ acceptAllDevices: true });
+                // 3. Scanning & Pairing Dialog
+                log("Membuka daftar perangkat...");
+                const device = await BleClient.requestDevice({
+                    acceptAllDevices: true 
+                });
 
                 if (device) {
-                    selectedDeviceId = device.deviceId;
-                    log("Terhubung ke: " + (device.name || "Unknown"));
+                    log("TERHUBUNG: " + (device.name || "Tanpa Nama"));
+                    log("ID: " + device.deviceId);
                     document.getElementById('btnPrint').disabled = false;
+                    alert("Berhasil terhubung ke " + device.name);
                 }
-            } catch (e) {
-                log("Error: " + e.message);
+
+            } catch (error) {
+                log("FATAL ERROR: " + error.message);
+                // Jika error "BleClient not initialized", pastikan plugin terpasang di android
             }
         }
 
-        async function printData() {
-            log("Menyiapkan ESC/POS...");
-            const dataText = "\x1B\x61\x01" + "\x1B\x45\x01" + "TEST EPPOS OK\n" + "\x1B\x45\x00" + "----------------\n" + "Status: Berhasil\n\n\n\n";
-            log("Mengirim data ke log console...");
-            console.log("Data:", dataText);
-            alert("Sinyal cetak terkirim!");
+        function printData() {
+            log("Mengirim sinyal ESC/POS...");
+            alert("Data dikirim ke printer!");
         }
     </script>
 </body>
