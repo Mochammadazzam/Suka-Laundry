@@ -13,9 +13,10 @@ jobs:
         with:
           java-version: '17'
           distribution: 'zulu'
-          cache: 'gradle'
+          # Cache dimatikan dulu untuk build pertama agar tidak bentrok dengan folder yang belum ada
+          # cache: 'gradle' 
 
-      - name: Install Dependencies
+      - name: Install NPM Dependencies
         run: npm install
 
       - name: Prepare Web Build (Root to WWW)
@@ -23,20 +24,19 @@ jobs:
           mkdir -p www
           cp index.html www/index.html
 
-      - name: Initial Capacitor Android
+      - name: Create Android Project & Sync
         run: |
-          npx cap add android || echo "Android platform already exists"
+          # Pastikan platform android dibuat dari nol
+          npx cap add android || echo "Android folder already exists"
           npx cap sync android
 
       - name: Inject Bluetooth & Location Permissions
         run: |
-          # Menambahkan semua izin yang dibutuhkan untuk Bluetooth & Thermal Printer
-          # Baris ini menyisipkan izin TEPAT sebelum tag <application> di AndroidManifest
+          # Inject izin ke AndroidManifest.xml setelah folder android dibuat
           sed -i '/<application/i \
           <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" /> \
-          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /> \
-          <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" /> \
+          <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
           <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
           <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> \
@@ -48,11 +48,10 @@ jobs:
       - name: Build APK Debug
         run: |
           cd android
-          ./gradlew clean
           ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EPPOS-Printer-Tester
+          name: EPPOS-SukaLaundry
           path: android/app/build/outputs/apk/debug/app-debug.apk
