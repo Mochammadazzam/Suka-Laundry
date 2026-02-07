@@ -109,32 +109,45 @@
                 }
             }
 
-            log("Menyiapkan teks...");
-            const esc = "\x1B";
-            let text = esc + "@"; // Reset printer
-            text += esc + "a" + "\x01"; // Rata tengah
-            text += esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00"; // Bold aktif lalu mati
-            text += "--------------------------------\n";
-            text += "Tes Cetak : BERHASIL!\n";
-            text += "Waktu     : " + new Date().toLocaleString('id-ID') + "\n";
-            text += "--------------------------------\n";
-            text += "\n\n\n\n"; // Spasi akhir (feed)
+                   
+                log("Menyiapkan teks...");
+        const encoder = new TextEncoder();
+        const esc = "\x1B";
+        
+        let text = esc + "@"; // Reset
+        text += esc + "a" + "\x01"; // Center
+        text += esc + "E" + "\x01" + "SUKA LAUNDRY\n" + esc + "E" + "\x00"; 
+        text += "--------------------------------\n";
+        text += "Tes Cetak : BERHASIL!\n";
+        text += "--------------------------------\n";
+        text += "\n\n\n\n"; 
 
-            // Proses konversi ke DataView (Solusi 'Value required')
-            const hasilEncode = new TextEncoder().encode(text);
-            const dataView = new DataView(hasilEncode.buffer);
+        // KONVERSI YANG LEBIH STABIL
+        const encodedData = encoder.encode(text);
+        // Coba kirim langsung encodedData (Uint8Array) jika DataView masih gagal
+        const bufferToSend = new DataView(encodedData.buffer);
 
-            log("Mengirim teks ke printer...");
+        log("Mengirim teks ke printer...");
 
-            // Menggunakan properti 'value' dengan DataView
+        try {
             await BleClient.writeWithoutResponse({
                 deviceId: currentId,
                 service: targetService,
                 characteristic: targetChar,
-                value: dataView 
+                value: bufferToSend
             });
-
             log("CETAK SELESAI!");
+        } catch (e) {
+            log("Mencoba metode alternatif...");
+           
+            await BleClient.writeWithoutResponse({
+                deviceId: currentId,
+                service: targetService,
+                characteristic: targetChar,
+                value: encodedData 
+            });
+            log("CETAK SELESAI (Alt)!");
+        }
 
             // Beri waktu proses sebelum putus koneksi
             setTimeout(async () => {
