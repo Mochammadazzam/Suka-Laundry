@@ -515,60 +515,49 @@
 
         // 1. FUNGSI SAMBUNG PRINTER (btConnect)
                          // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI FIX
+        // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI IDENTIK TESTER
         async function btConnect() {
-    const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
-    
-    // Pastikan memanggil Plugin dengan cara yang sama seperti Tester
-    const BleClient = isNative ? window.Capacitor.Plugins.BluetoothLe : null;
+            const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+            if (!isNative) return showMessage("Gunakan APK untuk fitur ini");
 
-    if (isNative && BleClient) {
-        try {
-            await BleClient.initialize();
-            
-            const isEnabled = await BleClient.isEnabled();
-            if (!isEnabled.value) {
-                showMessage("Mengaktifkan Bluetooth...");
-                await BleClient.requestEnable();
-            }
+            const BleClient = window.Capacitor.Plugins.BluetoothLe;
 
-            // INI KUNCINYA: Pakai acceptAllDevices agar panel sistem Android muncul
-            const device = await BleClient.requestDevice({ 
-                acceptAllDevices: true 
-            });
-
-            if (device && device.deviceId) {
-                app.printDevice = device;
-                app.isNativeBT = true;
+            try {
+                await BleClient.initialize();
                 
-                // Lakukan koneksi agar status di header berubah
-                await BleClient.connect({ deviceId: device.deviceId });
+                const isEnabled = await BleClient.isEnabled();
+                if (!isEnabled.value) {
+                    showMessage("Mengaktifkan Bluetooth...");
+                    await BleClient.requestEnable();
+                    // Tunggu sesaat agar hardware siap
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                showMessage("Mencari printer...");
                 
-                document.getElementById('btn-printer').style.color = '#2ecc71';
-                showMessage("Printer Terhubung!");
+                // MINTA PANEL SCANNING (IDENTIK TESTER)
+                const device = await BleClient.requestDevice({ 
+                    acceptAllDevices: true 
+                });
+
+                if (device && device.deviceId) {
+                    app.printDevice = device;
+                    app.isNativeBT = true;
+                    
+                    // Hubungkan agar sistem mengunci alamat printer
+                    await BleClient.connect({ deviceId: device.deviceId });
+                    
+                    document.getElementById('btn-printer').style.color = '#2ecc71';
+                    showMessage("Printer Terhubung: " + (device.name || "Thermal"));
+                }
+            } catch (e) {
+                console.error("BT Error:", e);
+                // Jika user klik luar panel, jangan munculkan pesan error yang menakutkan
+                if (e.message !== "requestDevice cancelled") {
+                    showMessage("Gagal: Pastikan GPS & Bluetooth Aktif");
+                }
             }
-        } catch (e) {
-            console.error(e);
-            showMessage("Pencarian dibatalkan");
         }
-    } else if (navigator.bluetooth) {
-        // Jalur Web Bluetooth tetap dipertahankan untuk Chrome Laptop
-        try {
-            const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: [SERVICE_UUID]
-            });
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            app.printCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-            app.printDevice = device;
-            app.isNativeBT = false;
-            document.getElementById('btn-printer').style.color = '#2ecc71';
-            showMessage("Printer Terhubung (Web)!");
-        } catch (e) {
-            showMessage("Koneksi Web Gagal");
-        }
-    }
-}
 
 
         // 2. FUNGSI CETAK STRUK (printThermalInvoice)
