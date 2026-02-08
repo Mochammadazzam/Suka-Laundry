@@ -1,4 +1,4 @@
-name: Build Android Pro 
+name: Build Suka Laundry Pro - Fix Force Close
 
 on:
   push:
@@ -21,17 +21,26 @@ jobs:
           npm install
           npm install -g @capacitor/cli 
 
-      - name: Prepare Web Assets
+      - name: Prepare Web Assets (Index di Luar Fix)
         run: |
+          # 1. Buat folder www karena config mencari folder ini
           mkdir -p www
-          cp index.html www/ 
+          # 2. Copy index.html dari luar (root) ke dalam www
+          cp index.html www/
+          # 3. Copy assets lain jika ada (opsional)
+          # cp -r css/ www/ || true
+          # cp -r js/ www/ || true
 
-      - name: Initialize Capacitor Android
+      - name: Initialize Capacitor Android (Fresh Build)
         run: |
-          npx cap add android || true
+          # Hapus folder android lama agar tidak ada sisa Capacitor 5
+          rm -rf android
+          # Tambah platform android baru (Capacitor 7)
+          npx cap add android
+          # Sync akan otomatis mengambil index.html dari folder www yang kita isi tadi
           npx cap sync android 
 
-      - name: Inject Bluetooth Permissions (Android 14+ Fix)
+      - name: Inject Bluetooth Permissions (Android 14 Fix)
         run: |
           SED_PERMS='/<manifest/a \
           <uses-permission android:name="android.permission.BLUETOOTH" /> \
@@ -46,16 +55,16 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '21' # DIUBAH DARI 17 KE 21
+          java-version: '21' 
 
       - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug 
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-Cap7-Final
+          name: Suka-Laundry-Pro-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
