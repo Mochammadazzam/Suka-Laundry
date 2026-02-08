@@ -15,15 +15,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install
+          # Gunakan --legacy-peer-deps agar instalasi berjalan mulus
+          npm install --legacy-peer-deps
           npx cap sync
 
-      - name: Inject Bluetooth Permissions to Manifest
+      - name: Inject Bluetooth Permissions
         run: |
-          # Perintah ini akan menyisipkan izin Bluetooth tepat sebelum tag <application>
+          # Menambahkan izin Bluetooth langsung ke manifest yang baru dibuat
           sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
           
-          # Memastikan Bluetooth digunakan secara opsional (agar HP tanpa Bluetooth tetap bisa install)
+          # Menambahkan fitur hardware agar tidak wajib (fleksibilitas device)
           sed -i '/<application/i \    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
@@ -32,8 +33,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-APK
-          path: android/app/build/outputs/apk/debug/sukalaundry.apk
+          name: Suka-Laundry-Pro-STABLE
+          path: android/app/build/outputs/apk/debug/app-debug.apk
