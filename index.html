@@ -505,226 +505,132 @@
         const SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
         const CHARACTERISTIC_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
 
+                // --- 1. PERBAIKAN OBJEK APP & PRINTER ENGINE ---
         let app = {
             members: [], services: [], transactions: [], cart: [],
             settings: { name: "Suka Laundry", address: "Alamat Toko", phone: "08", footer: "Terima Kasih" },
             homeFilter: 'today', histFilterStatus: 'ALL', histFilterDay: 'ALL', currentTx: null,
-            printDevice: null, printCharacteristic: null, isNativeBT: false, memberSpecificFilter: null
+            printDevice: null, isNativeBT: false, memberSpecificFilter: null
         };
 
-
-        // 1. FUNGSI SAMBUNG PRINTER (btConnect)
-                         // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI FIX
-        // 1. FUNGSI SAMBUNG PRINTER (btConnect) - VERSI IDENTIK TESTER
         async function btConnect() {
             const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
             if (!isNative) return showMessage("Gunakan APK untuk fitur ini");
-
             const BleClient = window.Capacitor.Plugins.BluetoothLe;
-
             try {
                 await BleClient.initialize();
-                
+                const permStatus = await BleClient.checkPermissions();
+        if (permStatus.bluetoothConnect !== 'granted') {
+            await BleClient.requestPermissions();
+        }
                 const isEnabled = await BleClient.isEnabled();
                 if (!isEnabled.value) {
                     showMessage("Mengaktifkan Bluetooth...");
                     await BleClient.requestEnable();
-                    // Tunggu sesaat agar hardware siap
                     await new Promise(r => setTimeout(r, 1000));
                 }
-
                 showMessage("Mencari printer...");
-                
-                // MINTA PANEL SCANNING (IDENTIK TESTER)
-                const device = await BleClient.requestDevice({ 
-                    acceptAllDevices: true 
-                });
-
+                const device = await BleClient.requestDevice({ acceptAllDevices: true });
                 if (device && device.deviceId) {
                     app.printDevice = device;
                     app.isNativeBT = true;
-                    
-                    // Hubungkan agar sistem mengunci alamat printer
                     await BleClient.connect({ deviceId: device.deviceId });
-                    
                     document.getElementById('btn-printer').style.color = '#2ecc71';
-                    showMessage("Printer Terhubung: " + (device.name || "Thermal"));
+                    showMessage("Printer Terhubung!");
                 }
-            } catch (e) {
-                console.error("BT Error:", e);
-                // Jika user klik luar panel, jangan munculkan pesan error yang menakutkan
-                if (e.message !== "requestDevice cancelled") {
-                    showMessage("Gagal: Pastikan GPS & Bluetooth Aktif");
-                }
-            }
+            } catch (e) { if (e.message !== "requestDevice cancelled") showMessage("Gagal Koneksi!"); }
         }
 
+        async function printThermalInvoice() {
+    if (!app.currentTx || !app.printDevice) return alert("Pilih printer dulu!");
+    const BleClient = window.Capacitor.Plugins.BluetoothLe;
+    const deviceId = app.printDevice.deviceId;
 
-        // 2. FUNGSI CETAK STRUK (printThermalInvoice)
-                async function printThermalInvoice() {
-            if (!app.currentTx || !app.printDevice) {
-                return showMessage("Printer Belum Terhubung!");
-            }
+    try {
+        await BleClient.initialize();
+        try { await BleClient.connect({ deviceId }); } catch(e) {}
+        
+        const t = app.currentTx;
+        const esc = "\x1B";
+        const gs = "\x1D";
+        
+        // Membangun teks struk
+        let text = esc + "@"; // Reset printer
+        text += esc + "a" + "\x01"; // Center alignment
+        text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
+        text += (app.settings.address || '') + "\n";
+        text += "--------------------------------\n";
+        text += esc + "a" + "\x00"; // Left alignment
+        text += "Nota : " + t.invoice + "\n";
+        text += "Plg  : " + t.member.name.toUpperCase() + "\n";
+        text += "--------------------------------\n";
+        
+        t.items.forEach(i => {
+            text += i.serviceName.toUpperCase() + "\n";
+            text += i.qty + " " + i.unit + " x " + i.price.toLocaleString('id-ID') + "\n";
+            text += "Subtotal: Rp" + i.subtotal.toLocaleString('id-ID') + "\n";
+        });
+        
+        text += "--------------------------------\n";
+        text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
+        text += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n";
 
-            const BleClient = window.Capacitor.Plugins.BluetoothLe;
-            const currentId = app.printDevice.deviceId;
+        // --- ENGINE CHUNKING (PEMECAH DATA) ---
+        const encoder = new TextEncoder();
+        const fullPayload = encoder.encode(text);
+        const chunkSize = 20; // Kirim per 20 byte agar sangat aman
 
-            try {
-                showMessage("Menghubungkan...");
-                
-                // 1. Koneksi dengan timeout singkat
-                await BleClient.connect({ deviceId: currentId });
-                await new Promise(r => setTimeout(r, 500)); // Jeda agar tidak crash
-
-                // 2. Langsung tembak UUID standar (Jangan pakai Discovery/getServices yang bikin berat)
-                const targetService = "000018f0-0000-1000-8000-00805f9b34fb"; 
-                const targetChar = "00002af1-0000-1000-8000-00805f9b34fb";    
-
-                // 3. Susun Teks
-                const t = app.currentTx;
-                const encoder = new TextEncoder();
-                const esc = "\x1B";
-                let text = esc + "@" + esc + "a" + "\x01"; // Reset & Center
-                text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
-                text += (app.settings.address || '') + "\n";
-                text += "--------------------------------\n";
-                text += esc + "a" + "\x00"; // Left
-                text += "Nota : " + t.invoice + "\n";
-                text += "Plg  : " + t.member.name.toUpperCase() + "\n";
-                text += "--------------------------------\n";
-                
-                t.items.forEach(i => {
-                    text += i.serviceName.toUpperCase() + "\n";
-                    text += i.qty + " " + i.unit + " Rp" + i.subtotal.toLocaleString('id-ID') + "\n";
-                });
-                
-                text += "--------------------------------\n";
-                text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
-                text += "Status: " + t.status + "\n\n\n\n\n";
-
-                const uint8array = encoder.encode(text);
-                
-                // 4. Kirim Data dengan format Base64 (Lebih enteng buat beberapa driver Android)
-                const base64Data = btoa(String.fromCharCode(...uint8array));
-                
-                showMessage("Mengirim data...");
-                await BleClient.write({
-                    deviceId: currentId,
-                    service: targetService,
-                    characteristic: targetChar,
-                    value: base64Data
-                });
-
-                showMessage("Cetak Selesai!");
-
-                // 5. Jeda sebelum disconnect (Penting agar tidak Force Close saat menutup jalur)
-                await new Promise(r => setTimeout(r, 1000));
-                await BleClient.disconnect({ deviceId: currentId });
-
-            } catch (e) { 
-                console.error(e);
-                showMessage("Gagal: Printer sibuk/RTO"); 
-                // Jika error, coba paksa putus koneksi biar tidak ngunci
-                try { await BleClient.disconnect({ deviceId: currentId }); } catch(err) {}
-            }
+        for (let i = 0; i < fullPayload.length; i += chunkSize) {
+            const chunk = fullPayload.slice(i, i + chunkSize);
+            const base64Chunk = btoa(String.fromCharCode(...chunk));
+            
+            await BleClient.write({
+                deviceId: deviceId,
+                service: SERVICE_UUID,
+                characteristic: CHARACTERISTIC_UUID,
+                value: base64Chunk
+            });
+            
+            // Beri jeda sangat singkat agar Bluetooth tidak macet
+            await new Promise(r => setTimeout(r, 10)); 
         }
 
+        showMessage("Cetak Selesai!");
+    } catch (error) {
+        console.error("Print Error:", error);
+        alert("Gagal mencetak! Pastikan printer menyala.");
+    }
+}
 
-        // REALTIME SYNC
-        function initSync() {
+        function initSync() { 
             db.collection('members').where('appId','==',APP_ID).onSnapshot(snap => {
                 app.members = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                renderMembers();
-                updateDropdowns();
+                renderMembers(); updateDropdowns();
             });
             db.collection('services').where('appId','==',APP_ID).onSnapshot(snap => {
                 app.services = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                renderServices();
-                updatePOSGrid();
+                renderServices(); updatePOSGrid();
             });
             db.collection('transactions').where('appId','==',APP_ID).onSnapshot(snap => {
                 app.transactions = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-                renderHome();
-                renderHistory();
+                renderHome(); renderHistory();
             });
-            db.collection('settings').doc('profile').onSnapshot(d => { if(d.exists) { app.settings = d.data(); applySettings(); updateSettingPreview(); } });
+            db.collection('settings').doc('profile').onSnapshot(d => { 
+                if(d.exists) { app.settings = d.data(); applySettings(); updateSettingPreview(); } 
+            });
         }
 
-        // NAVIGATION
-        function showPage(p) {
-            document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
-            document.getElementById('page-'+p).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            document.getElementById('nav-'+p).classList.add('active');
-            window.scrollTo(0,0);
-        }
-
-        // UTILS
-        function formatIDR(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n); }
-                function askConfirm(title, msg, action) {
-    const btnAction = document.getElementById('btn-confirm-action');
-    if(!btnAction) return; // Keamanan jika elemen tidak ditemukan
-
-    document.getElementById('confirm-title').innerText = title;
-    document.getElementById('confirm-msg').innerText = msg;
-    
-    btnAction.innerText = "Ya, Lanjutkan";
-    btnAction.disabled = false;
-    btnAction.style.opacity = "1";
-    
-    btnAction.onclick = async () => {
-        btnAction.innerText = "Memproses...";
-        btnAction.disabled = true;
-        btnAction.style.opacity = "0.7";
-        
-        await action();
-        closeModal(); 
-    };
-
-    openModal('confirm');
-}
-
-        function showMessage(m) { const n = document.getElementById('notification'); n.innerText = m; n.classList.add('show'); setTimeout(() => n.classList.remove('show'), 2000); }
-        function closeModal() { document.querySelectorAll('.modal-bg').forEach(m => m.classList.remove('active')); }
-        function openModal(m) { document.getElementById('modal-'+m).classList.add('active'); }
-        function isSameDay(d1, d2) { return d1.toDateString() === d2.toDateString(); }
-
-        // POS LOGIC
-        function addToCart(sid) {
-            const s = app.services.find(x => x.id === sid);
-            const ex = app.cart.find(x => x.serviceId === sid);
-            if(ex) { ex.qty++; ex.subtotal = ex.price * ex.qty; }
-            else { app.cart.push({ serviceId: sid, serviceName: s.name, qty: 1, price: s.price, unit: s.unit, subtotal: s.price }); }
-            updateCart();
-        }
-
-                function updateCart() {
-            const float = document.getElementById('pos-floating-cart');
-            const list = document.getElementById('cart-list');
-            if(app.cart.length > 0) {
-                float.style.display = 'block';
-                list.innerHTML = app.cart.map(i => `
-                    <div class="list-item" style="padding:10px; background:var(--bg); border-style:dashed;">
-                        <div style="flex:1"><b>${i.serviceName}</b><br>
-                            <div style="display:flex; align-items:center; gap:5px; margin-top:5px;">
-                                <input type="number" step="any" inputmode="decimal" value="${i.qty}" 
-                                       style="width:80px; padding:8px; font-weight:700; border:1px solid var(--border); border-radius:10px;" 
-                                       oninput="syncQty('${i.serviceId}', this.value)"
-                                       onkeypress="return (event.charCode >= 48 && event.charCode <= 57) || event.charCode == 46 || event.charCode == 44">
-                                <small>${i.unit}</small>
-                            </div>
-                        </div>
-                        <div style="text-align:right">
-                            <b id="subtotal-${i.serviceId}">${formatIDR(i.subtotal)}</b><br>
-                            <small onclick="removeFromCart('${i.serviceId}')" style="color:var(--danger); cursor:pointer; font-weight:700;">Hapus</small>
-                        </div>
-                    </div>
-                `).join('');
+        function syncQty(sid, val) {
+            let v = parseFloat(val.toString().replace(',', '.'));
+            if (isNaN(v) || v < 0) v = 0;
+            const item = app.cart.find(x => x.serviceId === sid);
+            if(item) {
+                item.qty = v; item.subtotal = item.price * v;
                 updateGrandTotal();
-            } else float.style.display = 'none';
+                const el = document.getElementById(`subtotal-${sid}`);
+                if(el) el.innerText = formatIDR(item.subtotal);
+            }
         }
-
-
 
         function syncQty(sid, val) {
     // 1. Ubah koma ke titik agar bisa diproses sebagai angka desimal
@@ -1244,33 +1150,23 @@ async function deleteTx() {
     );
 }
 
-        async function downloadJPG() {
+        function downloadJPG() {
     const area = document.getElementById('invoice-capture-area');
-    const { Filesystem } = Capacitor.Plugins;
-    const { Share } = Capacitor.Plugins;
-
-    try {
-        const canvas = await html2canvas(area, { scale: 3 }); // Scale 3 cukup tajam
-        const base64Data = canvas.toDataURL("image/jpeg", 0.9);
-        
-        const fileName = `Nota-${app.currentTx.invoice}.jpg`;
-
-        // Simpan ke folder cache HP
-        const savedFile = await Filesystem.writeFile({
-            path: fileName,
-            data: base64Data,
-            directory: 'CACHE'
-        });
-
-        // Panggil menu Share HP (Bisa kirim ke WA/Simpan ke Galeri)
-        await Share.share({
-            title: 'Simpan Nota',
-            url: savedFile.uri,
-        });
-    } catch (e) {
-        showMessage("Gagal simpan/share: " + e.message);
-    }
+    
+    // Scale Up gambar HD
+    html2canvas(area, {
+        scale: 8, 
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#FFFFFF"
+    }).then(canvas => {
+        const l = document.createElement('a');
+        l.download = `Nota-${app.currentTx.invoice}.jpg`;
+        l.href = canvas.toDataURL("image/jpeg", 0.9); // Kualitas 90%
+        l.click();
+    });
 }
+
 
         function shareWA() {
     const t = app.currentTx;
@@ -1564,6 +1460,7 @@ window.onload = async () => {
     const MY_ID = getDeviceId();
     const savedName = localStorage.getItem('heikasir_owner');
     
+    // Sembunyikan body dulu untuk pengecekan keamanan
     document.body.style.display = "none"; 
 
     // Cek apakah sudah pernah login
@@ -1612,29 +1509,6 @@ window.onload = async () => {
                 </div>`;
             return;
         }
-        
-            // --- BACK BUTTON ---
-        if (window.Capacitor) {
-            const { App } = Capacitor.Plugins;
-            let lastTimeBackPress = 0;
-            App.addListener('backButton', () => {
-                const activeModal = document.querySelector('.modal-bg.active');
-                const cartPopup = document.getElementById('pos-floating-cart');
-                if (activeModal) {
-                    closeModal(); 
-                } else if (cartPopup && cartPopup.style.display === 'block') {
-                    hideCart(); 
-                } else {
-                    const now = Date.now();
-                    if (now - lastTimeBackPress < 2000) {
-                        App.exitApp(); 
-                    } else {
-                        lastTimeBackPress = now;
-                        showMessage("Tekan sekali lagi untuk keluar");
-                    }
-                }
-            });
-        }
 
         // --- REMOTE NOTIF SYNC ---
         if (d.remoteNotif === true && localStorage.getItem('notif_closed_day') !== now.toDateString()) {
@@ -1669,6 +1543,114 @@ window.onload = async () => {
         }
     });
 };
+// --- FUNGSI MODAL & KERANJANG YANG HILANG ---
+
+function openModal(id) {
+    const modal = document.getElementById('modal-' + id);
+    if(modal) modal.classList.add('active');
+}
+
+function addToCart(sid) {
+    const service = app.services.find(s => s.id === sid);
+    if (!service) return;
+
+    const existing = app.cart.find(item => item.serviceId === sid);
+    if (existing) {
+        existing.qty += 1;
+        existing.subtotal = existing.qty * existing.price;
+    } else {
+        app.cart.push({
+            serviceId: service.id,
+            serviceName: service.name,
+            price: service.price,
+            qty: 1,
+            unit: service.unit,
+            subtotal: service.price
+        });
+    }
+    updateCart();
+    showMessage(service.name + " ditambah");
+}
+
+function updateCart() {
+    const list = document.getElementById('cart-list');
+    const floating = document.getElementById('pos-floating-cart');
+    
+    if (app.cart.length > 0) {
+        floating.style.display = 'block';
+        list.innerHTML = app.cart.map(item => `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:#f8fafc; padding:10px; border-radius:12px;">
+                <div style="flex:1">
+                    <div style="font-weight:700; font-size:13px;">${item.serviceName}</div>
+                    <div style="display:flex; align-items:center; gap:5px; margin-top:5px;">
+                        <input type="number" value="${item.qty}" oninput="syncQty('${item.serviceId}', this.value)" 
+                               style="width:60px; padding:5px; border-radius:8px; border:1px solid #ddd; text-align:center;">
+                        <small>${item.unit}</small>
+                    </div>
+                </div>
+                <div style="text-align:right">
+                    <div id="subtotal-${item.serviceId}" style="font-weight:800; color:var(--primary);">${formatIDR(item.subtotal)}</div>
+                    <button onclick="removeFromCart('${item.serviceId}')" style="border:none; background:none; color:var(--danger); font-size:12px; margin-top:5px;">Hapus</button>
+                </div>
+            </div>
+        `).join('');
+        updateGrandTotal();
+    } else {
+        floating.style.display = 'none';
+    }
+}
+
+
+// 1. Fungsi ini mutlak diperlukan untuk filter Riwayat & Home
+function isSameDay(d1, d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+}
+
+// 2. Fungsi untuk menampilkan pesan toast/notif hitam di atas
+function showMessage(msg) {
+    const notif = document.getElementById('notification');
+    if(notif) {
+        notif.innerText = msg;
+        notif.className = 'show';
+        setTimeout(() => { notif.className = ''; }, 3000);
+    }
+}
+
+// 3. Fungsi untuk navigasi antar menu bawah (Home, Kasir, dll)
+function showPage(p) {
+    document.querySelectorAll('.page').forEach(pg => pg.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(ni => ni.classList.remove('active'));
+    
+    const targetPage = document.getElementById('page-' + p);
+    const targetNav = document.getElementById('nav-' + p);
+    
+    if(targetPage) targetPage.classList.add('active');
+    if(targetNav) targetNav.classList.add('active');
+}
+
+// 4. Fungsi konfirmasi sebelum hapus/simpan
+function askConfirm(title, msg, callback) {
+    const mTitle = document.getElementById('confirm-title');
+    const mMsg = document.getElementById('confirm-msg');
+    const mModal = document.getElementById('modal-confirm');
+    
+    if(mTitle && mMsg && mModal) {
+        mTitle.innerText = title;
+        mMsg.innerText = msg;
+        mModal.classList.add('active');
+        document.getElementById('btn-confirm-action').onclick = callback;
+    }
+}
+function formatIDR(angka) {
+    if (isNaN(angka)) return "Rp 0";
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    }).format(angka);
+}
 
 </script>
 </body>
