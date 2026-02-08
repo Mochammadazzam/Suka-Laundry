@@ -1,0 +1,39 @@
+name: Build Android APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npx cap sync
+
+      - name: Inject Bluetooth Permissions to Manifest
+        run: |
+          # Perintah ini akan menyisipkan izin Bluetooth tepat sebelum tag <application>
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          
+          # Memastikan Bluetooth digunakan secara opsional (agar HP tanpa Bluetooth tetap bisa install)
+          sed -i '/<application/i \    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Suka-Laundry-Pro-APK
+          path: android/app/build/outputs/apk/debug/sukalaundry.apk
