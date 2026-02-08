@@ -1,39 +1,35 @@
-name: Build Suka Laundry Pro - Super Auto
+name: Build Suka Laundry Pro - Master Reference
 on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Build Android Capacitor
-        # Menggunakan @main agar selalu mendapatkan versi terbaru yang kompatibel
-        uses: henryhale/android-capacitor@main
+      # Menggunakan referensi marketplace yang disebutkan di PDF Anda (Henryhale)
+      # Ini adalah 'resep' yang sudah terbukti berhasil untuk Capacitor
+      - name: Build Android via Henryhale Reference
+        uses: henryhale/android-capacitor@v2
         with:
           npm-install-args: --legacy-peer-deps
-          
-      - name: Automasi Keamanan & Fitur
-        run: |
-          # 1. Pastikan folder android ada sebelum inject
-          if [ -d "android" ]; then
-            # Suntik Izin Bluetooth & Internet ke Manifest
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-            
-            # 2. Aktifkan Minify/Anti-Decompile (R8)
-            sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
-          else
-            echo "Folder android belum dibuat oleh Action, pastikan capacitor.config.json benar."
-          fi
 
-      - name: Compile Pro APK
+      - name: Auto-Config & Protection
+        run: |
+          # Menyuntikkan standar Bluetooth LE (halaman 12 PDF)
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          
+          # Aktifkan Proteksi Kode (Anti-Decompile)
+          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
+
+      - name: Build Final APK
         run: |
           cd android
-          chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Save Result
         uses: actions/upload-artifact@v4
         with:
-          name: SukaLaundryPro-Final
+          name: SukaLaundryPro-Success-Build
           path: android/app/build/outputs/apk/debug/app-debug.apk
