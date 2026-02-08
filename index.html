@@ -486,6 +486,19 @@
     </nav>
 
     <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+    var message = [
+        'Message: ' + msg,
+        'Line: ' + lineNo,
+        'Column: ' + columnNo,
+        'Error object: ' + JSON.stringify(error)
+    ].join('\n');
+
+    // Menampilkan alert agar Anda bisa baca sebelum aplikasi tertutup
+    alert("APLIKASI ERROR:\n" + message);
+    return false;
+};
+
                         const firebaseConfig = {
           apiKey: "AIzaSyA8Vt7F98KgZA0w4uU4G856rnULyiDnhDE",
           authDomain: "suka-laundry.firebaseapp.com",
@@ -545,27 +558,46 @@
 
 
         async function printThermalInvoice() {
-    if (!app.currentTx || !app.printDevice) return alert("Pilih printer dulu!");
+    // 1. Validasi awal untuk mencegah pemanggilan variabel null
+    if (!app.currentTx) {
+        alert("ERROR: Data transaksi tidak ditemukan!");
+        return;
+    }
+    
+    if (!app.printDevice || !app.printDevice.deviceId) {
+        alert("GAGAL: Printer belum terhubung. Silakan klik ikon printer di pojok kanan atas.");
+        return;
+    }
+
     const BleClient = window.Capacitor.Plugins.BluetoothLe;
     const deviceId = app.printDevice.deviceId;
 
     try {
+        showMessage("Menyiapkan data cetak...");
         await BleClient.initialize();
-        try { await BleClient.connect({ deviceId }); } catch(e) {}
         
+        // Coba koneksi ulang jika terputus
+        try { 
+            await BleClient.connect({ deviceId }); 
+        } catch(e) {
+            console.log("Printer sudah terkoneksi atau sedang sibuk.");
+        }
+
         const t = app.currentTx;
         const esc = "\x1B";
-        const gs = "\x1D";
         
         // Membangun teks struk
         let text = esc + "@"; // Reset printer
         text += esc + "a" + "\x01"; // Center alignment
         text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
         text += (app.settings.address || '') + "\n";
+        text += "WA: " + (app.settings.phone || '-') + "\n";
         text += "--------------------------------\n";
+        
         text += esc + "a" + "\x00"; // Left alignment
         text += "Nota : " + t.invoice + "\n";
         text += "Plg  : " + t.member.name.toUpperCase() + "\n";
+        text += "Tgl  : " + (t.createdAt ? t.createdAt.toDate().toLocaleDateString('id-ID') : '-') + "\n";
         text += "--------------------------------\n";
         
         t.items.forEach(i => {
@@ -576,16 +608,21 @@
         
         text += "--------------------------------\n";
         text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
-        text += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n";
+        text += "Status: " + t.status + "\n";
+        text += "--------------------------------\n";
+        text += esc + "a" + "\x01"; // Center
+        text += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n\n";
 
-        // --- ENGINE CHUNKING (PEMECAH DATA) ---
+        // --- ENGINE PENGIRIMAN DATA AMAN (ANTI FORCE CLOSE) ---
         const encoder = new TextEncoder();
-        const fullPayload = encoder.encode(text);
-        const chunkSize = 20; // Kirim per 20 byte agar sangat aman
+        const bytes = encoder.encode(text);
+        const chunkSize = 20; // Ukuran paket data kecil agar stabil di Bluetooth Classic/LE
 
-        for (let i = 0; i < fullPayload.length; i += chunkSize) {
-            const chunk = fullPayload.slice(i, i + chunkSize);
-            const base64Chunk = btoa(String.fromCharCode(...chunk));
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.slice(i, i + chunkSize);
+            
+            // Konversi chunk ke Base64 menggunakan metode yang aman dari karakter khusus
+            const base64Chunk = btoa(String.fromCharCode.apply(null, chunk));
             
             await BleClient.write({
                 deviceId: deviceId,
@@ -594,14 +631,25 @@
                 value: base64Chunk
             });
             
-            // Beri jeda sangat singkat agar Bluetooth tidak macet
-            await new Promise(r => setTimeout(r, 10)); 
+            // Jeda 20ms agar buffer printer tidak meluap (overflow)
+            await new Promise(r => setTimeout(r, 20));
         }
 
-        showMessage("Cetak Selesai!");
+        showMessage("Cetak struk berhasil!");
+
     } catch (error) {
-        console.error("Print Error:", error);
-        alert("Gagal mencetak! Pastikan printer menyala.");
+        // MENANGKAP ERROR: Jika terjadi kegagalan, aplikasi memberikan info, bukan menutup (Force Close)
+        console.error("Print Error Detail:", error);
+        
+        let errorMsg = "Terjadi kesalahan saat mencetak.";
+        if (error.message.includes("not connected")) {
+            errorMsg = "Printer terputus. Silakan hubungkan ulang.";
+        } else if (error.message.includes("location")) {
+            errorMsg = "Izin lokasi/Bluetooth diperlukan untuk mencetak.";
+        }
+
+        // Munculkan popup info error agar Anda tahu bagian mana yang gagal
+        alert("INFO GAGAL CETAK:\n" + errorMsg + "\n\nDetail: " + error.message);
     }
 }
 
