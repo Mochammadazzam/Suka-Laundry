@@ -8,28 +8,31 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Menggunakan referensi marketplace yang disebutkan di PDF Anda (Henryhale)
-      # Ini adalah 'resep' yang sudah terbukti berhasil untuk Capacitor
-      - name: Build Android via Henryhale Reference
-        uses: henryhale/android-capacitor@v2
+      # Menggunakan referensi marketplace yang disebutkan di dokumen Anda
+      # Ini adalah 'resep' yang paling otomatis dan stabil untuk Capacitor
+      - name: Build Android via Automated Action
+        uses: henryhale/android-capacitor@main
         with:
           npm-install-args: --legacy-peer-deps
 
       - name: Auto-Config & Protection
         run: |
-          # Menyuntikkan standar Bluetooth LE (halaman 12 PDF)
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          
-          # Aktifkan Proteksi Kode (Anti-Decompile)
-          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
+          # 1. Pastikan folder android ada, lalu suntik izin Bluetooth standar (Hal 12 PDF)
+          if [ -d "android" ]; then
+            sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+            
+            # 2. Aktifkan Proteksi Kode (Anti-Decompile) agar menyesuaikan otomatis
+            sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
+          fi
 
       - name: Build Final APK
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Save Result
         uses: actions/upload-artifact@v4
         with:
-          name: SukaLaundryPro-Success-Build
+          name: SukaLaundryPro-Success
           path: android/app/build/outputs/apk/debug/app-debug.apk
