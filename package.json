@@ -1,11 +1,16 @@
 {
   "name": "suka-laundry-pro",
   "version": "1.0.0",
-  "description": "Suka Laundry Pro - Ultra Power v7",
+  "description": "Aplikasi Kasir Laundry Bluetooth",
+  "main": "index.html",
+  "scripts": {
+    "build": "npx cap sync"
+  },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0"
-    },
+    "@capacitor/core": "^7.0.0",
+    "@capacitor-community/bluetooth-le": "^3.1.0"
+  },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0"
   }
