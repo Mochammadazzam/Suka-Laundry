@@ -486,19 +486,6 @@
     </nav>
 
     <script>
-        window.onerror = function (msg, url, lineNo, columnNo, error) {
-    var message = [
-        'Message: ' + msg,
-        'Line: ' + lineNo,
-        'Column: ' + columnNo,
-        'Error object: ' + JSON.stringify(error)
-    ].join('\n');
-
-    // Menampilkan alert agar Anda bisa baca sebelum aplikasi tertutup
-    alert("APLIKASI ERROR:\n" + message);
-    return false;
-};
-
                         const firebaseConfig = {
           apiKey: "AIzaSyA8Vt7F98KgZA0w4uU4G856rnULyiDnhDE",
           authDomain: "suka-laundry.firebaseapp.com",
@@ -526,79 +513,98 @@
             printDevice: null, isNativeBT: false, memberSpecificFilter: null
         };
 
-                const ThermalPrinter = window.Capacitor.Plugins.CapacitorThermalPrinter;
-
-async function btConnect() {
-    const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
-    if (!isNative) return showMessage("Gunakan APK untuk fitur ini");
-
-    try {
-        // 1. Munculkan daftar printer yang sudah di-pairing di HP
-        const result = await ThermalPrinter.listPrinters();
-        
-        if (result.printers.length === 0) {
-            return alert("Tidak ada printer terdeteksi. Silakan pairing dulu di pengaturan Bluetooth HP.");
+                async function btConnect() {
+            const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+            if (!isNative) return showMessage("Gunakan APK untuk fitur ini");
+            const BleClient = window.Capacitor.Plugins.BluetoothLe;
+            try {
+                await BleClient.initialize();
+                const isEnabled = await BleClient.isEnabled();
+                if (!isEnabled.value) {
+                    showMessage("Mengaktifkan Bluetooth...");
+                    await BleClient.requestEnable();
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                showMessage("Mencari printer...");
+                // Bagian ini yang memunculkan panel cari perangkat
+                const device = await BleClient.requestDevice({ acceptAllDevices: true });
+                if (device && device.deviceId) {
+                    app.printDevice = device;
+                    app.isNativeBT = true;
+                    await BleClient.connect({ deviceId: device.deviceId });
+                    document.getElementById('btn-printer').style.color = '#2ecc71';
+                    showMessage("Printer Terhubung!");
+                }
+            } catch (e) { 
+                if (e.message !== "requestDevice cancelled") {
+                    console.error(e);
+                    showMessage("Gagal Koneksi!"); 
+                }
+            }
         }
 
-        // 2. Pilih printer pertama (atau biarkan user memilih lewat UI)
-        const selectedPrinter = result.printers[0]; 
 
-        showMessage("Menghubungkan ke " + selectedPrinter.name + "...");
-        
-        // 3. Hubungkan via MAC Address (Address lebih stabil daripada DeviceID)
-        await ThermalPrinter.connect({ 
-            address: selectedPrinter.address 
-        });
-
-        app.printDevice = selectedPrinter;
-        document.getElementById('btn-printer').style.color = '#2ecc71';
-        showMessage("Printer Terhubung!");
-        
-    } catch (e) {
-        console.error(e);
-        alert("Gagal Koneksi: " + e.message);
-    }
-}
-
-async function printThermalInvoice() {
-    if (!app.currentTx || !app.printDevice) {
-        return alert("Pilih transaksi dan hubungkan printer dulu!");
-    }
+        async function printThermalInvoice() {
+    if (!app.currentTx || !app.printDevice) return alert("Pilih printer dulu!");
+    const BleClient = window.Capacitor.Plugins.BluetoothLe;
+    const deviceId = app.printDevice.deviceId;
 
     try {
-        const t = app.currentTx;
+        await BleClient.initialize();
+        try { await BleClient.connect({ deviceId }); } catch(e) {}
         
-        // 1. Rakit Teks Struk (Langsung String, Plugin ini menangani bytes secara native)
-        let content = "";
-        content += (app.settings.name || "SUKA LAUNDRY").toUpperCase() + "\n";
-        content += (app.settings.address || "") + "\n";
-        content += "--------------------------------\n";
-        content += "Nota : " + t.invoice + "\n";
-        content += "Plg  : " + t.member.name.toUpperCase() + "\n";
-        content += "--------------------------------\n";
+        const t = app.currentTx;
+        const esc = "\x1B";
+        const gs = "\x1D";
+        
+        // Membangun teks struk
+        let text = esc + "@"; // Reset printer
+        text += esc + "a" + "\x01"; // Center alignment
+        text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
+        text += (app.settings.address || '') + "\n";
+        text += "--------------------------------\n";
+        text += esc + "a" + "\x00"; // Left alignment
+        text += "Nota : " + t.invoice + "\n";
+        text += "Plg  : " + t.member.name.toUpperCase() + "\n";
+        text += "--------------------------------\n";
         
         t.items.forEach(i => {
-            content += i.serviceName.toUpperCase() + "\n";
-            content += i.qty + " " + i.unit + " x " + i.price + " = " + i.subtotal + "\n";
+            text += i.serviceName.toUpperCase() + "\n";
+            text += i.qty + " " + i.unit + " x " + i.price.toLocaleString('id-ID') + "\n";
+            text += "Subtotal: Rp" + i.subtotal.toLocaleString('id-ID') + "\n";
         });
         
-        content += "--------------------------------\n";
-        content += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
-        content += "Status: " + t.status + "\n";
-        content += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n\n";
+        text += "--------------------------------\n";
+        text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
+        text += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n";
 
-        // 2. Perintah Cetak (Sangat Stabil, tidak memicu force close)
-        await ThermalPrinter.printText({ 
-            text: content 
-        });
+        // --- ENGINE CHUNKING (PEMECAH DATA) ---
+        const encoder = new TextEncoder();
+        const fullPayload = encoder.encode(text);
+        const chunkSize = 20; // Kirim per 20 byte agar sangat aman
 
-        showMessage("Cetak Berhasil!");
+        for (let i = 0; i < fullPayload.length; i += chunkSize) {
+            const chunk = fullPayload.slice(i, i + chunkSize);
+            const base64Chunk = btoa(String.fromCharCode(...chunk));
+            
+            await BleClient.write({
+                deviceId: deviceId,
+                service: SERVICE_UUID,
+                characteristic: CHARACTERISTIC_UUID,
+                value: base64Chunk
+            });
+            
+            // Beri jeda sangat singkat agar Bluetooth tidak macet
+            await new Promise(r => setTimeout(r, 10)); 
+        }
 
+        showMessage("Cetak Selesai!");
     } catch (error) {
-        console.error(error);
-        alert("Gagal Cetak: " + error.message);
+        console.error("Print Error:", error);
+        alert("Gagal mencetak! Pastikan printer menyala.");
     }
 }
+
         function initSync() { 
             db.collection('members').where('appId','==',APP_ID).onSnapshot(snap => {
                 app.members = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -617,9 +623,23 @@ async function printThermalInvoice() {
             });
         }
 
+        function syncQty(sid, val) {
+            let v = parseFloat(val.toString().replace(',', '.'));
+            if (isNaN(v) || v < 0) v = 0;
+            const item = app.cart.find(x => x.serviceId === sid);
+            if(item) {
+                item.qty = v; item.subtotal = item.price * v;
+                updateGrandTotal();
+                const el = document.getElementById(`subtotal-${sid}`);
+                if(el) el.innerText = formatIDR(item.subtotal);
+            }
+        }
 
         function syncQty(sid, val) {
+    // 1. Ubah koma ke titik agar bisa diproses sebagai angka desimal
     let normalizedVal = val.toString().replace(',', '.');
+    
+    // 2. Ubah string ke angka, jika kosong atau bukan angka, anggap 0
     let v = parseFloat(normalizedVal);
     if (isNaN(v) || v < 0) v = 0;
     
@@ -628,13 +648,14 @@ async function printThermalInvoice() {
         item.qty = v;
         item.subtotal = item.price * v;
         
+        // 3. Update teks subtotal di layar secara real-time
         const subtotalEl = document.getElementById(`subtotal-${sid}`);
         if(subtotalEl) subtotalEl.innerText = formatIDR(item.subtotal);
         
+        // 4. Hitung ulang total belanja keseluruhan
         updateGrandTotal();
     }
 }
-
 
 
 function updateGrandTotal() {
@@ -1637,5 +1658,4 @@ function formatIDR(angka) {
 </script>
 </body>
 </html>
-
 
