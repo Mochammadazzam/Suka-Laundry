@@ -15,16 +15,19 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          # Gunakan --legacy-peer-deps agar instalasi berjalan mulus
           npm install --legacy-peer-deps
+
+      - name: Create Android Folder
+        run: |
+          # Membuat folder android secara otomatis jika belum ada di repo
+          npx cap add android
           npx cap sync
 
       - name: Inject Bluetooth Permissions
         run: |
-          # Menambahkan izin Bluetooth langsung ke manifest yang baru dibuat
+          # Sekarang file manifest dipastikan ada, robot bisa menyuntikkan izin
           sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
           
-          # Menambahkan fitur hardware agar tidak wajib (fleksibilitas device)
           sed -i '/<application/i \    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
