@@ -558,98 +558,80 @@
 
 
         async function printThermalInvoice() {
-    // 1. Validasi awal untuk mencegah pemanggilan variabel null
-    if (!app.currentTx) {
-        alert("ERROR: Data transaksi tidak ditemukan!");
-        return;
-    }
-    
-    if (!app.printDevice || !app.printDevice.deviceId) {
-        alert("GAGAL: Printer belum terhubung. Silakan klik ikon printer di pojok kanan atas.");
-        return;
-    }
+    // 1. Validasi awal - Pastikan objek tidak kosong
+    if (!app.currentTx) return alert("Data transaksi kosong!");
+    if (!app.printDevice || !app.printDevice.deviceId) return alert("Hubungkan printer terlebih dahulu!");
 
     const BleClient = window.Capacitor.Plugins.BluetoothLe;
     const deviceId = app.printDevice.deviceId;
 
     try {
-        showMessage("Menyiapkan data cetak...");
-        await BleClient.initialize();
-        
-        // Coba koneksi ulang jika terputus
-        try { 
-            await BleClient.connect({ deviceId }); 
-        } catch(e) {
-            console.log("Printer sudah terkoneksi atau sedang sibuk.");
+        // Cek koneksi sebelum memulai proses berat
+        const connected = await BleClient.isConnected({ deviceId }).catch(() => ({ value: false }));
+        if (!connected.value) {
+            await BleClient.connect({ deviceId }).catch(e => { throw new Error("Gagal menyambungkan ke printer: " + e.message) });
         }
 
         const t = app.currentTx;
         const esc = "\x1B";
         
-        // Membangun teks struk
-        let text = esc + "@"; // Reset printer
-        text += esc + "a" + "\x01"; // Center alignment
+        // Membangun teks struk (Tanpa karakter aneh dulu untuk tes stabilitas)
+        let text = esc + "@"; 
+        text += esc + "a" + "\x01"; // Center
         text += (app.settings.name || 'SUKA LAUNDRY').toUpperCase() + "\n";
         text += (app.settings.address || '') + "\n";
-        text += "WA: " + (app.settings.phone || '-') + "\n";
         text += "--------------------------------\n";
         
-        text += esc + "a" + "\x00"; // Left alignment
+        text += esc + "a" + "\x00"; // Left
         text += "Nota : " + t.invoice + "\n";
         text += "Plg  : " + t.member.name.toUpperCase() + "\n";
-        text += "Tgl  : " + (t.createdAt ? t.createdAt.toDate().toLocaleDateString('id-ID') : '-') + "\n";
         text += "--------------------------------\n";
         
         t.items.forEach(i => {
             text += i.serviceName.toUpperCase() + "\n";
-            text += i.qty + " " + i.unit + " x " + i.price.toLocaleString('id-ID') + "\n";
-            text += "Subtotal: Rp" + i.subtotal.toLocaleString('id-ID') + "\n";
+            text += i.qty + " " + i.unit + " x " + i.price + "\n";
         });
         
         text += "--------------------------------\n";
         text += "TOTAL: Rp " + t.totalPrice.toLocaleString('id-ID') + "\n";
-        text += "Status: " + t.status + "\n";
-        text += "--------------------------------\n";
-        text += esc + "a" + "\x01"; // Center
-        text += "\n" + (app.settings.footer || "Terima Kasih") + "\n\n\n\n\n";
+        text += "\n\n\n\n\n"; // Beri ruang potong kertas
 
-        // --- ENGINE PENGIRIMAN DATA AMAN (ANTI FORCE CLOSE) ---
+        // --- PENGIRIMAN DATA SUPER AMAN ---
         const encoder = new TextEncoder();
         const bytes = encoder.encode(text);
-        const chunkSize = 20; // Ukuran paket data kecil agar stabil di Bluetooth Classic/LE
+        
+        // Gunakan ukuran paket yang sangat kecil (20 byte) 
+        // Ini standar MTU Bluetooth agar Android tidak kelebihan beban
+        const chunkSize = 20; 
 
         for (let i = 0; i < bytes.length; i += chunkSize) {
             const chunk = bytes.slice(i, i + chunkSize);
             
-            // Konversi chunk ke Base64 menggunakan metode yang aman dari karakter khusus
-            const base64Chunk = btoa(String.fromCharCode.apply(null, chunk));
+            // Cara konversi Base64 yang paling stabil untuk WebView Android
+            let binary = '';
+            for (let j = 0; j < chunk.byteLength; j++) {
+                binary += String.fromCharCode(chunk[j]);
+            }
+            const base64Chunk = btoa(binary);
             
+            // Eksekusi penulisan ke Bluetooth
             await BleClient.write({
                 deviceId: deviceId,
                 service: SERVICE_UUID,
                 characteristic: CHARACTERISTIC_UUID,
                 value: base64Chunk
             });
-            
-            // Jeda 20ms agar buffer printer tidak meluap (overflow)
-            await new Promise(r => setTimeout(r, 20));
+
+            // Jeda 50ms (lebih lambat tapi jauh lebih stabil agar tidak memicu bug sistem)
+            await new Promise(r => setTimeout(r, 50));
         }
 
-        showMessage("Cetak struk berhasil!");
+        alert("Cetak Berhasil!");
 
     } catch (error) {
-        // MENANGKAP ERROR: Jika terjadi kegagalan, aplikasi memberikan info, bukan menutup (Force Close)
-        console.error("Print Error Detail:", error);
-        
-        let errorMsg = "Terjadi kesalahan saat mencetak.";
-        if (error.message.includes("not connected")) {
-            errorMsg = "Printer terputus. Silakan hubungkan ulang.";
-        } else if (error.message.includes("location")) {
-            errorMsg = "Izin lokasi/Bluetooth diperlukan untuk mencetak.";
-        }
-
-        // Munculkan popup info error agar Anda tahu bagian mana yang gagal
-        alert("INFO GAGAL CETAK:\n" + errorMsg + "\n\nDetail: " + error.message);
+        console.error(error);
+        // Jika tertangkap di sini, aplikasi tidak akan Force Close
+        alert("SISTEM BLUETOOTH SIBUK:\n" + error.message);
     }
 }
 
