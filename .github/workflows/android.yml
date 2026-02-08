@@ -18,7 +18,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install
+          # Menggunakan --legacy-peer-deps untuk mengatasi konflik versi Capacitor
+          npm install --legacy-peer-deps
           npm install -g @capacitor/cli 
 
       - name: Prepare Web Assets
@@ -29,10 +30,11 @@ jobs:
       - name: Initialize Capacitor Android
         run: |
           npx cap add android || true
-          npx cap sync android 
+          npx cap sync android --legacy-peer-deps
 
       - name: Inject Bluetooth Permissions (Android 12-14 Fix)
         run: |
+          # Script sakti untuk menyisipkan izin Bluetooth tanpa merusak manifest
           SED_PERMS='/<manifest/a \
           <uses-permission android:name="android.permission.BLUETOOTH" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" /> \
