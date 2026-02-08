@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Suka Laundry Pro - Super Auto
 on: [push]
 
 jobs:
@@ -6,31 +6,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: set up JDK 17
-        uses: actions/setup-java@v4
+
+      - name: Build Android Capacitor
+        uses: henryhale/android-capacitor@v3
         with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Install Dependencies
+          # Versi 6 stabil sesuai diskusi agar plugin Bluetooth tidak konflik
+          npm-install-args: --legacy-peer-deps
+          
+      - name: Automasi Keamanan & Fitur
         run: |
-          npm install --legacy-peer-deps
-
-      - name: Create Android Folder
-        run: |
-          # Membuat folder android secara otomatis jika belum ada di repo
-          npx cap add android
-          npx cap sync
-
-      - name: Inject Bluetooth Permissions
-        run: |
-          # Sekarang file manifest dipastikan ada, robot bisa menyuntikkan izin
+          # 1. Suntik Izin Bluetooth & Internet ke Manifest
           sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
           
-          sed -i '/<application/i \    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />' android/app/src/main/AndroidManifest.xml
+          # 2. Aktifkan Minify/Anti-Decompile (R8) di build.gradle
+          # Mengubah 'minifyEnabled false' menjadi 'true' secara otomatis
+          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
 
-      - name: Build Debug APK
+      - name: Compile Pro APK
         run: |
           cd android
           chmod +x gradlew
@@ -39,5 +31,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Suka-Laundry-Pro-STABLE
+          name: SukaLaundryPro-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
