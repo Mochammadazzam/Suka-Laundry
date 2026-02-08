@@ -8,19 +8,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Android Capacitor
-        uses: henryhale/android-capacitor@v3
+        # Menggunakan @main agar selalu mendapatkan versi terbaru yang kompatibel
+        uses: henryhale/android-capacitor@main
         with:
-          # Versi 6 stabil sesuai diskusi agar plugin Bluetooth tidak konflik
           npm-install-args: --legacy-peer-deps
           
       - name: Automasi Keamanan & Fitur
         run: |
-          # 1. Suntik Izin Bluetooth & Internet ke Manifest
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-          
-          # 2. Aktifkan Minify/Anti-Decompile (R8) di build.gradle
-          # Mengubah 'minifyEnabled false' menjadi 'true' secara otomatis
-          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
+          # 1. Pastikan folder android ada sebelum inject
+          if [ -d "android" ]; then
+            # Suntik Izin Bluetooth & Internet ke Manifest
+            sed -i '/<application/i \    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+            
+            # 2. Aktifkan Minify/Anti-Decompile (R8)
+            sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
+          else
+            echo "Folder android belum dibuat oleh Action, pastikan capacitor.config.json benar."
+          fi
 
       - name: Compile Pro APK
         run: |
