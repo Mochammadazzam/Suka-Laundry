@@ -1,4 +1,4 @@
-name: Build Suka Laundry Pro - Ultra Clean
+name: Build Suka Laundry Pro - Ultra Power Native Printer
 
 on:
   push:
@@ -25,17 +25,15 @@ jobs:
         run: |
           mkdir -p www
           rm -rf www/*
-          # Mengambil index.html dari root dan menaruhnya ke folder build www
           cp index.html www/
 
       - name: Initialize Capacitor Android
         run: |
-          # Reset total folder native agar murni Capacitor 7
           rm -rf android
           npx cap add android
           npx cap sync android 
 
-      - name: Inject Permissions & Write MainActivity
+      - name: Inject Permissions & Custom Printer Plugin
         run: |
           # 1. Suntik Izin Bluetooth & Lokasi (Android 14 Ready)
           SED_PERMS='/<manifest/a \
@@ -43,41 +41,238 @@ jobs:
           <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /> \
           <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> \
-          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+          <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> \
+          <uses-feature android:name="android.hardware.bluetooth" android:required="false" /> \
+          <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />'
           sed -i "$SED_PERMS" android/app/src/main/AndroidManifest.xml 
 
-          # 2. Tulis Ulang MainActivity.java (Solusi Error Javac)
-          # Menggunakan metode cat untuk struktur Java yang sempurna
+          # 2. Tulis Ulang MainActivity.java untuk mendaftarkan Custom Printer Plugin
           cat <<EOF > android/app/src/main/java/com/sukalaundry/pro/MainActivity.java
           package com.sukalaundry.pro;
 
           import android.os.Bundle;
           import com.getcapacitor.BridgeActivity;
-          import com.malik12tree.bluetooth_print.CapacitorThermalPrinterPlugin;
 
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  registerPlugin(CapacitorThermalPrinterPlugin.class);
+                  // Daftarkan Custom Thermal Printer Plugin kita sendiri
+                  registerPlugin(SukaLaundryPrinter.class);
               }
           }
           EOF
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21' 
+          # 3. Buat file Java untuk Custom Thermal Printer Plugin (SukaLaundryPrinter.java)
+          # Ini adalah jantung dari "Ultra Power" Bluetooth kita
+          mkdir -p android/app/src/main/java/com/sukalaundry/pro/
+          cat <<EOF > android/app/src/main/java/com/sukalaundry/pro/SukaLaundryPrinter.java
+          package com.sukalaundry.pro;
 
-      - name: Build APK with Gradle
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          import android.Manifest;
+          import android.bluetooth.BluetoothAdapter;
+          import android.bluetooth.BluetoothDevice;
+          import android.bluetooth.BluetoothSocket;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.IntentFilter;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+          import com.getcapacitor.annotation.Permission;
+          import com.getcapacitor.annotation.PermissionCallback;
+          import java.io.IOException;
+          import java.io.OutputStream;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.Set;
+          import java.util.UUID;
 
-      - name: Upload Final APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Suka-Laundry-Pro-Final-v7
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          @CapacitorPlugin(
+              name = "SukaLaundryPrinter",
+              permissions = {
+                  @Permission(strings = {Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH}, alias = "bluetooth"),
+                  @Permission(strings = {Manifest.permission.ACCESS_FINE_LOCATION}, alias = "location")
+              }
+          )
+          public class SukaLaundryPrinter extends Plugin {
+
+              private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); // UUID standar SPP
+              private BluetoothAdapter bluetoothAdapter;
+              private BluetoothDevice connectedDevice;
+              private BluetoothSocket bluetoothSocket;
+              private OutputStream outputStream;
+              private PluginCall savedScanCall; // Untuk menyimpan panggilan scan
+
+              @Override
+              public void load() {
+                  super.load();
+                  bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+                  if (bluetoothAdapter == null) {
+                      // Perangkat tidak mendukung Bluetooth
+                      System.out.println("DEBUG: Perangkat tidak mendukung Bluetooth");
+                  }
+              }
+
+              @PluginMethod
+              public void listPrinters(PluginCall call) {
+                  // Cek izin terlebih dahulu
+                  if (getPermissionState("bluetooth") != PermissionState.GRANTED || getPermissionState("location") != PermissionState.GRANTED) {
+                      requestAllPermissions(call, "permissionsCallback");
+                      savedScanCall = call; // Simpan panggilan untuk diproses setelah izin
+                      return;
+                  }
+                  
+                  // Jika izin sudah ada, langsung proses
+                  performListPrinters(call);
+              }
+
+              @PermissionCallback
+              private void permissionsCallback(PluginCall call) {
+                  if (getPermissionState("bluetooth") == PermissionState.GRANTED && getPermissionState("location") == PermissionState.GRANTED) {
+                      performListPrinters(savedScanCall != null ? savedScanCall : call);
+                  } else {
+                      call.reject("Akses Bluetooth dan Lokasi ditolak.");
+                  }
+                  savedScanCall = null; // Reset saved call
+              }
+
+              private void performListPrinters(PluginCall call) {
+                  if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                      call.reject("Bluetooth tidak tersedia atau tidak diaktifkan.");
+                      return;
+                  }
+
+                  try {
+                      List<JSObject> deviceList = new ArrayList<>();
+                      Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+
+                      if (pairedDevices.size() > 0) {
+                          for (BluetoothDevice device : pairedDevices) {
+                              JSObject deviceObj = new JSObject();
+                              deviceObj.put("name", device.getName() != null ? device.getName() : "Unknown Device");
+                              deviceObj.put("address", device.getAddress()); // MAC Address
+                              deviceList.add(deviceObj);
+                          }
+                      }
+                      
+                      JSObject ret = new JSObject();
+                      ret.put("printers", deviceList);
+                      call.resolve(ret);
+                      System.out.println("DEBUG: List Printers Berhasil");
+
+                  } catch (SecurityException e) {
+                      call.reject("Izin Bluetooth tidak diberikan: " + e.getMessage());
+                      System.err.println("ERROR: Izin Bluetooth tidak diberikan: " + e.getMessage());
+                  }
+              }
+
+              @PluginMethod
+              public void connect(PluginCall call) {
+                  // Cek izin terlebih dahulu
+                  if (getPermissionState("bluetooth") != PermissionState.GRANTED) {
+                      call.reject("Izin Bluetooth belum diberikan untuk koneksi.");
+                      return;
+                  }
+
+                  String address = call.getString("address");
+                  if (address == null) {
+                      call.reject("Alamat printer tidak boleh kosong.");
+                      return;
+                  }
+
+                  if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                      call.reject("Bluetooth tidak tersedia atau tidak diaktifkan.");
+                      return;
+                  }
+
+                  try {
+                      bluetoothAdapter.cancelDiscovery(); // Hentikan penemuan perangkat jika sedang berlangsung
+                      connectedDevice = bluetoothAdapter.getRemoteDevice(address);
+                      bluetoothSocket = connectedDevice.createRfcommSocketToServiceRecord(SPP_UUID);
+                      
+                      // Coba koneksi dalam thread terpisah agar UI tidak freeze
+                      new Thread(() -> {
+                          try {
+                              bluetoothSocket.connect();
+                              outputStream = bluetoothSocket.getOutputStream();
+                              JSObject ret = new JSObject();
+                              ret.put("success", true);
+                              call.resolve(ret);
+                              System.out.println("DEBUG: Koneksi Bluetooth Berhasil");
+                          } catch (IOException e) {
+                              try {
+                                  bluetoothSocket.close();
+                              } catch (IOException closeException) {
+                                  System.err.println("DEBUG: Gagal menutup socket setelah gagal connect: " + closeException.getMessage());
+                              }
+                              call.reject("Gagal terhubung ke printer: " + e.getMessage());
+                              System.err.println("ERROR: Gagal terhubung ke printer: " + e.getMessage());
+                          } catch (SecurityException e) {
+                              call.reject("Izin Bluetooth tidak diberikan saat koneksi: " + e.getMessage());
+                              System.err.println("ERROR: Izin Bluetooth tidak diberikan saat koneksi: " + e.getMessage());
+                          }
+                      }).start();
+
+                  } catch (IOException e) {
+                      call.reject("Gagal membuat socket: " + e.getMessage());
+                      System.err.println("ERROR: Gagal membuat socket: " + e.getMessage());
+                  } catch (SecurityException e) {
+                      call.reject("Izin Bluetooth tidak diberikan saat connect: " + e.getMessage());
+                      System.err.println("ERROR: Izin Bluetooth tidak diberikan saat connect: " + e.getMessage());
+                  }
+              }
+
+              @PluginMethod
+              public void print(PluginCall call) {
+                  String data = call.getString("data");
+                  if (data == null) {
+                      call.reject("Data cetak tidak boleh kosong.");
+                      return;
+                  }
+
+                  if (outputStream == null) {
+                      call.reject("Printer belum terhubung.");
+                      return;
+                  }
+
+                  try {
+                      outputStream.write(data.getBytes());
+                      outputStream.flush(); // Pastikan semua data terkirim
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                      System.out.println("DEBUG: Cetak Berhasil");
+                  } catch (IOException e) {
+                      call.reject("Gagal mencetak: " + e.getMessage());
+                      System.err.println("ERROR: Gagal mencetak: " + e.getMessage());
+                  }
+              }
+
+              @PluginMethod
+              public void disconnect(PluginCall call) {
+                  try {
+                      if (outputStream != null) {
+                          outputStream.close();
+                          outputStream = null;
+                      }
+                      if (bluetoothSocket != null) {
+                          bluetoothSocket.close();
+                          bluetoothSocket = null;
+                      }
+                      connectedDevice = null;
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                      System.out.println("DEBUG: Disconnect Berhasil");
+                  } catch (IOException e) {
+                      call.reject("Gagal memutuskan koneksi: " + e.getMessage());
+                  }
+              }
+          }
+          EOF
