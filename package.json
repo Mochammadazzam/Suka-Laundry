@@ -1,12 +1,6 @@
 {
   "name": "com.sukalaundry.pro",
-  "version": "1.0.0",
-  "description": "Aplikasi Kasir Laundry Bluetooth Stabil",
-  "main": "index.html",
-  "scripts": {
-    "sync": "npx cap sync",
-    "add-android": "npx cap add android"
-  },
+  "version": "1.1.0",
   "dependencies": {
     "@capacitor/android": "^6.0.0",
     "@capacitor/core": "^6.0.0",
