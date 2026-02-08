@@ -513,16 +513,12 @@
             printDevice: null, isNativeBT: false, memberSpecificFilter: null
         };
 
-        async function btConnect() {
+                async function btConnect() {
             const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
             if (!isNative) return showMessage("Gunakan APK untuk fitur ini");
             const BleClient = window.Capacitor.Plugins.BluetoothLe;
             try {
                 await BleClient.initialize();
-                const permStatus = await BleClient.checkPermissions();
-        if (permStatus.bluetoothConnect !== 'granted') {
-            await BleClient.requestPermissions();
-        }
                 const isEnabled = await BleClient.isEnabled();
                 if (!isEnabled.value) {
                     showMessage("Mengaktifkan Bluetooth...");
@@ -530,6 +526,7 @@
                     await new Promise(r => setTimeout(r, 1000));
                 }
                 showMessage("Mencari printer...");
+                // Bagian ini yang memunculkan panel cari perangkat
                 const device = await BleClient.requestDevice({ acceptAllDevices: true });
                 if (device && device.deviceId) {
                     app.printDevice = device;
@@ -538,8 +535,14 @@
                     document.getElementById('btn-printer').style.color = '#2ecc71';
                     showMessage("Printer Terhubung!");
                 }
-            } catch (e) { if (e.message !== "requestDevice cancelled") showMessage("Gagal Koneksi!"); }
+            } catch (e) { 
+                if (e.message !== "requestDevice cancelled") {
+                    console.error(e);
+                    showMessage("Gagal Koneksi!"); 
+                }
+            }
         }
+
 
         async function printThermalInvoice() {
     if (!app.currentTx || !app.printDevice) return alert("Pilih printer dulu!");
