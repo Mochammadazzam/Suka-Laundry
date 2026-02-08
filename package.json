@@ -1,13 +1,11 @@
 {
   "name": "suka-laundry-pro",
   "version": "1.0.0",
-  "description": "Aplikasi Kasir Laundry Pro - Capacitor 7",
-  "main": "index.html",
+  "description": "Suka Laundry Pro - Ultra Power v7",
   "dependencies": {
     "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0",
-    "capacitor-thermal-printer": "git+https://github.com/Malik12tree/capacitor-thermal-printer.git"
-  },
+    "@capacitor/core": "^7.0.0"
+    },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0"
   }
